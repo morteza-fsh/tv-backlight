@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/FrameSource.h"
+#include <opencv2/videoio.hpp>
 #include <string>
+#include <memory>
 
 namespace TVLED {
 
@@ -23,8 +25,11 @@ private:
     int fps_;
     bool initialized_;
     
-    // Platform-specific camera handle
-    void* camera_handle_;  // Will be cast to appropriate type on platform
+    // OpenCV VideoCapture for camera access
+    std::unique_ptr<cv::VideoCapture> capture_;
+    
+    // Helper to parse device string to camera index
+    int parseDeviceIndex() const;
 };
 
 } // namespace TVLED

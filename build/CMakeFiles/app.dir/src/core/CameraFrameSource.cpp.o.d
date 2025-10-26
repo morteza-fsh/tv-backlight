@@ -923,4 +923,7 @@ CMakeFiles/app.dir/src/core/CameraFrameSource.cpp.o: \
   /opt/homebrew/Cellar/opencv/4.12.0_13/include/opencv4/opencv2/video.hpp \
   /opt/homebrew/Cellar/opencv/4.12.0_13/include/opencv4/opencv2/video/tracking.hpp \
   /opt/homebrew/Cellar/opencv/4.12.0_13/include/opencv4/opencv2/video/background_segm.hpp \
-  /Users/morteza/Projects/Playground/TV/cpp/include/utils/Logger.h
+  /Users/morteza/Projects/Playground/TV/cpp/include/utils/Logger.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/thread \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/this_thread.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.h
