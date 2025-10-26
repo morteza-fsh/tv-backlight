@@ -84,6 +84,18 @@ bool CameraFrameSource::initialize() {
         // Set camera properties
         bool success = true;
         
+        // For V4L2, set the format first (helps with Raspberry Pi cameras)
+        // Try MJPEG format which is widely supported
+        if (!capture_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'))) {
+            LOG_DEBUG("Could not set MJPEG format, trying YUYV");
+            if (!capture_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y','U','Y','V'))) {
+                LOG_DEBUG("Could not set YUYV format either, using default");
+            }
+        }
+        
+        // Set buffer size (helps with some cameras)
+        capture_->set(cv::CAP_PROP_BUFFERSIZE, 1);
+        
         // Set resolution
         if (!capture_->set(cv::CAP_PROP_FRAME_WIDTH, width_)) {
             LOG_WARN("Failed to set camera width to " + std::to_string(width_));
@@ -99,6 +111,9 @@ bool CameraFrameSource::initialize() {
             LOG_WARN("Failed to set camera FPS to " + std::to_string(fps_));
             success = false;
         }
+        
+        // Set autofocus (if supported)
+        capture_->set(cv::CAP_PROP_AUTOFOCUS, 1);
         
         // Get actual camera settings (they might differ from requested)
         double actual_width = capture_->get(cv::CAP_PROP_FRAME_WIDTH);
@@ -124,9 +139,22 @@ bool CameraFrameSource::initialize() {
         // Try to get the first valid frame (up to 20 attempts over 2 seconds)
         int max_warmup_attempts = 20;
         for (int i = 0; i < max_warmup_attempts; i++) {
-            if (capture_->read(temp_frame) && !temp_frame.empty()) {
+            bool read_result = capture_->read(temp_frame);
+            bool frame_valid = !temp_frame.empty();
+            
+            if (i == 0) {
+                // First attempt - provide detailed diagnostics
+                LOG_DEBUG("First read attempt: read=" + std::string(read_result ? "success" : "failed") + 
+                         ", frame_empty=" + std::string(frame_valid ? "no" : "yes"));
+                if (!frame_valid && !temp_frame.empty()) {
+                    LOG_DEBUG("Frame size: " + std::to_string(temp_frame.cols) + "x" + std::to_string(temp_frame.rows));
+                }
+            }
+            
+            if (read_result && frame_valid) {
                 warmup_success = true;
                 LOG_DEBUG("Got first valid frame on attempt " + std::to_string(i + 1));
+                LOG_DEBUG("Frame size: " + std::to_string(temp_frame.cols) + "x" + std::to_string(temp_frame.rows));
                 break;
             }
             LOG_DEBUG("Warmup attempt " + std::to_string(i + 1) + " failed, retrying...");
@@ -136,6 +164,28 @@ bool CameraFrameSource::initialize() {
         if (!warmup_success) {
             LOG_ERROR("Failed to read any frames during warmup after 2 seconds");
             LOG_ERROR("Camera may not be functioning properly");
+            LOG_ERROR("");
+            LOG_ERROR("=== TROUBLESHOOTING ===");
+            LOG_ERROR("This usually means OpenCV cannot access the camera through V4L2.");
+            LOG_ERROR("");
+            LOG_ERROR("For Raspberry Pi Camera Module on modern Raspberry Pi OS:");
+            LOG_ERROR("  1. Check if legacy camera is enabled:");
+            LOG_ERROR("     sudo raspi-config -> Interface Options -> Legacy Camera -> Enable");
+            LOG_ERROR("     Then reboot: sudo reboot");
+            LOG_ERROR("");
+            LOG_ERROR("  2. Or check if libcamera is working:");
+            LOG_ERROR("     libcamera-hello --list-cameras");
+            LOG_ERROR("     libcamera-still -o test.jpg");
+            LOG_ERROR("");
+            LOG_ERROR("  3. Check available V4L2 devices:");
+            LOG_ERROR("     v4l2-ctl --list-devices");
+            LOG_ERROR("     v4l2-ctl -d /dev/video0 --list-formats-ext");
+            LOG_ERROR("");
+            LOG_ERROR("For USB cameras:");
+            LOG_ERROR("  1. Check camera is detected: lsusb");
+            LOG_ERROR("  2. Check permissions: ls -l /dev/video0");
+            LOG_ERROR("  3. Try: sudo usermod -a -G video $USER");
+            LOG_ERROR("======================");
             capture_.reset();
             initialized_ = false;
             return false;
