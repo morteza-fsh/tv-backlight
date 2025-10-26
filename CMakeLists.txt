@@ -38,6 +38,18 @@ find_package(OpenCV REQUIRED)
 message(STATUS "OpenCV found: ${OpenCV_VERSION}")
 add_definitions(-DENABLE_OPENCV)
 
+# libcamera support (required for Raspberry Pi camera)
+# On Raspberry Pi: sudo apt-get install libcamera-dev
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBCAMERA REQUIRED libcamera)
+    message(STATUS "libcamera found: ${LIBCAMERA_VERSION}")
+else()
+    # On macOS, libcamera is not available - will use OpenCV fallback
+    message(STATUS "libcamera not available on this platform, using OpenCV for camera access")
+    set(LIBCAMERA_FOUND FALSE)
+endif()
+
 # JSON library (nlohmann/json - header only)
 # Try to find system package first, fallback to FetchContent
 find_package(nlohmann_json 3.11.0 QUIET)
@@ -99,6 +111,14 @@ add_executable(app ${SOURCES})
 target_link_libraries(app ${OpenCV_LIBS})
 target_include_directories(app PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_compile_definitions(app PRIVATE ENABLE_OPENCV)
+
+# Link libcamera (on Linux/Raspberry Pi)
+if(LIBCAMERA_FOUND)
+    target_link_libraries(app ${LIBCAMERA_LIBRARIES})
+    target_include_directories(app PRIVATE ${LIBCAMERA_INCLUDE_DIRS})
+    target_compile_definitions(app PRIVATE ENABLE_LIBCAMERA)
+    message(STATUS "Linking with libcamera")
+endif()
 
 # Link JSON library
 target_link_libraries(app nlohmann_json::nlohmann_json)

@@ -1,21 +1,25 @@
 #include "core/CameraFrameSource.h"
 #include "utils/Logger.h"
 #include <opencv2/imgproc.hpp>
+#include <libcamera/libcamera.h>
 #include <thread>
 #include <chrono>
+#include <sys/mman.h>
+
+using namespace libcamera;
 
 namespace TVLED {
 
 CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps)
     : device_(device), width_(width), height_(height), fps_(fps), 
-      initialized_(false), capture_(nullptr) {
+      initialized_(false), stream_(nullptr), stop_capture_(false) {
 }
 
 CameraFrameSource::~CameraFrameSource() {
     release();
 }
 
-int CameraFrameSource::parseDeviceIndex() const {
+int CameraFrameSource::parseCameraIndex() const {
     // Try to parse device string as integer index (e.g., "0", "1")
     try {
         return std::stoi(device_);
@@ -26,7 +30,6 @@ int CameraFrameSource::parseDeviceIndex() const {
             try {
                 return std::stoi(device_.substr(pos + 5));
             } catch (...) {
-                // Default to 0 if parsing fails
                 return 0;
             }
         }
@@ -35,252 +38,306 @@ int CameraFrameSource::parseDeviceIndex() const {
 }
 
 bool CameraFrameSource::initialize() {
-    LOG_INFO("Initializing camera: " + device_ + 
+    LOG_INFO("Initializing camera with libcamera: " + device_ + 
              " at " + std::to_string(width_) + "x" + std::to_string(height_) + 
              "@" + std::to_string(fps_) + "fps");
     
     try {
-        // Parse device index from string
-        int device_index = parseDeviceIndex();
-        LOG_DEBUG("Using camera index: " + std::to_string(device_index));
-        
-        // Create VideoCapture object
-        capture_ = std::make_unique<cv::VideoCapture>();
-        
-        // Try to open the camera
-        // On Raspberry Pi, try V4L2 backend first, which is most compatible
-        // For Raspberry Pi Camera Module, you may need to enable legacy camera support
-        // or use libcamera-vid to create a V4L2 device
-        bool opened = false;
-        
-        // Try V4L2 backend first (most common)
-        if (capture_->open(device_index, cv::CAP_V4L2)) {
-            LOG_INFO("Camera opened with V4L2 backend");
-            opened = true;
-        }
-        // Fallback to any available backend
-        else if (capture_->open(device_index, cv::CAP_ANY)) {
-            LOG_INFO("Camera opened with default backend");
-            opened = true;
-        }
-        
-        if (!opened) {
-            LOG_ERROR("Failed to open camera device: " + device_);
-            LOG_ERROR("Make sure the camera is connected and V4L2 device exists");
-            LOG_ERROR("For Raspberry Pi Camera Module, you may need:");
-            LOG_ERROR("  1. Enable legacy camera: sudo raspi-config -> Interface Options -> Legacy Camera");
-            LOG_ERROR("  2. Or use: v4l2-ctl --list-devices to find the correct device");
-            capture_.reset();
+        // Create camera manager
+        camera_manager_ = std::make_unique<CameraManager>();
+        int ret = camera_manager_->start();
+        if (ret) {
+            LOG_ERROR("Failed to start camera manager");
             return false;
         }
         
-        // Check if camera is opened
-        if (!capture_->isOpened()) {
-            LOG_ERROR("Camera opened but not ready: " + device_);
-            capture_.reset();
+        // List available cameras
+        auto cameras = camera_manager_->cameras();
+        if (cameras.empty()) {
+            LOG_ERROR("No cameras available");
+            camera_manager_->stop();
             return false;
         }
         
-        // Set camera properties
-        bool success = true;
+        LOG_INFO("Found " + std::to_string(cameras.size()) + " camera(s)");
         
-        // For V4L2, set the format first (helps with Raspberry Pi cameras)
-        // Try MJPEG format which is widely supported
-        if (!capture_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'))) {
-            LOG_DEBUG("Could not set MJPEG format, trying YUYV");
-            if (!capture_->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('Y','U','Y','V'))) {
-                LOG_DEBUG("Could not set YUYV format either, using default");
+        // Get camera index
+        int camera_index = parseCameraIndex();
+        if (camera_index >= static_cast<int>(cameras.size())) {
+            LOG_WARN("Camera index " + std::to_string(camera_index) + 
+                    " out of range, using camera 0");
+            camera_index = 0;
+        }
+        
+        // Get the camera
+        camera_ = cameras[camera_index];
+        LOG_INFO("Using camera: " + camera_->id());
+        
+        // Acquire the camera
+        if (camera_->acquire()) {
+            LOG_ERROR("Failed to acquire camera");
+            camera_manager_->stop();
+            return false;
+        }
+        
+        // Generate camera configuration
+        std::unique_ptr<CameraConfiguration> config = 
+            camera_->generateConfiguration({StreamRole::VideoRecording});
+        
+        if (!config) {
+            LOG_ERROR("Failed to generate camera configuration");
+            camera_->release();
+            camera_manager_->stop();
+            return false;
+        }
+        
+        // Configure the stream
+        StreamConfiguration &stream_config = config->at(0);
+        
+        // Set pixel format (prefer YUV420 for compatibility)
+        stream_config.pixelFormat = PixelFormat::fromString("YUV420");
+        stream_config.size.width = width_;
+        stream_config.size.height = height_;
+        
+        // Set buffer count
+        stream_config.bufferCount = 4;
+        
+        LOG_DEBUG("Requested format: " + stream_config.pixelFormat.toString() + 
+                 " " + std::to_string(width_) + "x" + std::to_string(height_));
+        
+        // Validate configuration
+        CameraConfiguration::Status validation = config->validate();
+        if (validation == CameraConfiguration::Invalid) {
+            LOG_ERROR("Camera configuration invalid");
+            camera_->release();
+            camera_manager_->stop();
+            return false;
+        }
+        
+        if (validation == CameraConfiguration::Adjusted) {
+            LOG_WARN("Camera configuration adjusted");
+            LOG_INFO("Actual format: " + stream_config.pixelFormat.toString() + 
+                    " " + std::to_string(stream_config.size.width) + "x" + 
+                    std::to_string(stream_config.size.height));
+        }
+        
+        // Apply configuration
+        if (camera_->configure(config.get())) {
+            LOG_ERROR("Failed to configure camera");
+            camera_->release();
+            camera_manager_->stop();
+            return false;
+        }
+        
+        // Store stream pointer
+        stream_ = stream_config.stream();
+        
+        // Allocate buffers
+        allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
+        if (allocator_->allocate(stream_) < 0) {
+            LOG_ERROR("Failed to allocate buffers");
+            camera_->release();
+            camera_manager_->stop();
+            return false;
+        }
+        
+        LOG_INFO("Allocated " + std::to_string(allocator_->buffers(stream_).size()) + " buffers");
+        
+        // Create requests
+        for (const std::unique_ptr<FrameBuffer> &buffer : allocator_->buffers(stream_)) {
+            std::unique_ptr<Request> request = camera_->createRequest();
+            if (!request) {
+                LOG_ERROR("Failed to create request");
+                camera_->release();
+                camera_manager_->stop();
+                return false;
             }
+            
+            if (request->addBuffer(stream_, buffer.get())) {
+                LOG_ERROR("Failed to add buffer to request");
+                camera_->release();
+                camera_manager_->stop();
+                return false;
+            }
+            
+            // Set controls (optional - for exposure/white balance)
+            // request->controls().set(controls::ExposureTime, ...);
+            
+            requests_.push_back(std::move(request));
         }
         
-        // Set buffer size (helps with some cameras)
-        capture_->set(cv::CAP_PROP_BUFFERSIZE, 1);
+        // Connect request completed signal
+        camera_->requestCompleted.connect(this, &CameraFrameSource::onRequestComplete);
         
-        // Set resolution
-        if (!capture_->set(cv::CAP_PROP_FRAME_WIDTH, width_)) {
-            LOG_WARN("Failed to set camera width to " + std::to_string(width_));
-            success = false;
-        }
-        if (!capture_->set(cv::CAP_PROP_FRAME_HEIGHT, height_)) {
-            LOG_WARN("Failed to set camera height to " + std::to_string(height_));
-            success = false;
+        // Start camera
+        if (camera_->start()) {
+            LOG_ERROR("Failed to start camera");
+            camera_->release();
+            camera_manager_->stop();
+            return false;
         }
         
-        // Set FPS
-        if (!capture_->set(cv::CAP_PROP_FPS, fps_)) {
-            LOG_WARN("Failed to set camera FPS to " + std::to_string(fps_));
-            success = false;
+        // Queue all requests
+        for (std::unique_ptr<Request> &request : requests_) {
+            camera_->queueRequest(request.get());
         }
         
-        // Set autofocus (if supported)
-        capture_->set(cv::CAP_PROP_AUTOFOCUS, 1);
+        LOG_INFO("Camera started successfully");
         
-        // Get actual camera settings (they might differ from requested)
-        double actual_width = capture_->get(cv::CAP_PROP_FRAME_WIDTH);
-        double actual_height = capture_->get(cv::CAP_PROP_FRAME_HEIGHT);
-        double actual_fps = capture_->get(cv::CAP_PROP_FPS);
-        
-        LOG_INFO("Camera initialized successfully");
-        LOG_INFO("Requested: " + std::to_string(width_) + "x" + std::to_string(height_) + 
-                 "@" + std::to_string(fps_) + "fps");
-        LOG_INFO("Actual: " + std::to_string((int)actual_width) + "x" + 
-                 std::to_string((int)actual_height) + "@" + 
-                 std::to_string((int)actual_fps) + "fps");
-        
-        // Warm up the camera by reading frames
-        // Match picamera2 behavior: wait ~2 seconds for auto-exposure/white balance to settle
+        // Warm up - wait for auto-exposure/white balance to settle
+        // This matches the Python picamera2 behavior (time.sleep(2))
         LOG_DEBUG("Warming up camera (allowing auto-exposure/white balance to settle)...");
-        cv::Mat temp_frame;
-        bool warmup_success = false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         
-        // First, give the camera some initial time to wake up
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        
-        // Try to get the first valid frame (up to 20 attempts over 2 seconds)
-        int max_warmup_attempts = 20;
-        for (int i = 0; i < max_warmup_attempts; i++) {
-            bool read_result = capture_->read(temp_frame);
-            bool frame_valid = !temp_frame.empty();
-            
-            if (i == 0) {
-                // First attempt - provide detailed diagnostics
-                LOG_DEBUG("First read attempt: read=" + std::string(read_result ? "success" : "failed") + 
-                         ", frame_empty=" + std::string(frame_valid ? "no" : "yes"));
-                if (!frame_valid && !temp_frame.empty()) {
-                    LOG_DEBUG("Frame size: " + std::to_string(temp_frame.cols) + "x" + std::to_string(temp_frame.rows));
-                }
+        // Clear any queued frames from warmup
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            while (!frame_queue_.empty()) {
+                frame_queue_.pop();
             }
-            
-            if (read_result && frame_valid) {
-                warmup_success = true;
-                LOG_DEBUG("Got first valid frame on attempt " + std::to_string(i + 1));
-                LOG_DEBUG("Frame size: " + std::to_string(temp_frame.cols) + "x" + std::to_string(temp_frame.rows));
-                break;
-            }
-            LOG_DEBUG("Warmup attempt " + std::to_string(i + 1) + " failed, retrying...");
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         
-        if (!warmup_success) {
-            LOG_ERROR("Failed to read any frames during warmup after 2 seconds");
-            LOG_ERROR("Camera may not be functioning properly");
-            LOG_ERROR("");
-            LOG_ERROR("=== TROUBLESHOOTING ===");
-            LOG_ERROR("This usually means OpenCV cannot access the camera through V4L2.");
-            LOG_ERROR("");
-            LOG_ERROR("For Raspberry Pi Camera Module on modern Raspberry Pi OS:");
-            LOG_ERROR("  1. Check if legacy camera is enabled:");
-            LOG_ERROR("     sudo raspi-config -> Interface Options -> Legacy Camera -> Enable");
-            LOG_ERROR("     Then reboot: sudo reboot");
-            LOG_ERROR("");
-            LOG_ERROR("  2. Or check if libcamera is working:");
-            LOG_ERROR("     libcamera-hello --list-cameras");
-            LOG_ERROR("     libcamera-still -o test.jpg");
-            LOG_ERROR("");
-            LOG_ERROR("  3. Check available V4L2 devices:");
-            LOG_ERROR("     v4l2-ctl --list-devices");
-            LOG_ERROR("     v4l2-ctl -d /dev/video0 --list-formats-ext");
-            LOG_ERROR("");
-            LOG_ERROR("For USB cameras:");
-            LOG_ERROR("  1. Check camera is detected: lsusb");
-            LOG_ERROR("  2. Check permissions: ls -l /dev/video0");
-            LOG_ERROR("  3. Try: sudo usermod -a -G video $USER");
-            LOG_ERROR("======================");
-            capture_.reset();
-            initialized_ = false;
-            return false;
-        }
-        
-        // Continue reading frames for another 1.5 seconds to allow camera to stabilize
-        // This matches the 2-second delay in the Python picamera2 code
-        LOG_DEBUG("Camera responding, continuing warmup for stabilization...");
-        auto warmup_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(1500);
-        int frames_read = 0;
-        
-        while (std::chrono::steady_clock::now() < warmup_end) {
-            if (capture_->read(temp_frame) && !temp_frame.empty()) {
-                frames_read++;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        
-        LOG_INFO("Camera warmup complete, read " + std::to_string(frames_read) + " stabilization frames");
+        LOG_INFO("Camera warmup complete");
         
         initialized_ = true;
         return true;
         
     } catch (const std::exception& e) {
         LOG_ERROR("Exception during camera initialization: " + std::string(e.what()));
-        capture_.reset();
-        initialized_ = false;
+        release();
         return false;
     }
 }
 
+void CameraFrameSource::onRequestComplete(Request *request) {
+    if (request->status() == Request::RequestCancelled) {
+        return;
+    }
+    
+    // Convert frame to cv::Mat
+    cv::Mat frame = convertFrameToMat(request);
+    
+    if (!frame.empty()) {
+        // Add to queue
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        if (frame_queue_.size() < 5) {  // Limit queue size
+            frame_queue_.push(frame.clone());
+            queue_cv_.notify_one();
+        }
+    }
+    
+    // Requeue the request if camera is still running
+    if (!stop_capture_ && camera_ && camera_->state() == Camera::CameraRunning) {
+        request->reuse(Request::ReuseBuffers);
+        camera_->queueRequest(request);
+    }
+}
+
+cv::Mat CameraFrameSource::convertFrameToMat(Request *request) {
+    const FrameBuffer *buffer = request->buffers().begin()->second;
+    const FrameBuffer::Plane &plane = buffer->planes()[0];
+    
+    // Map the buffer
+    void *memory = mmap(nullptr, plane.length, PROT_READ, MAP_SHARED, 
+                       plane.fd.get(), 0);
+    if (memory == MAP_FAILED) {
+        LOG_ERROR("Failed to mmap frame buffer");
+        return cv::Mat();
+    }
+    
+    // Get stream configuration
+    const StreamConfiguration &cfg = stream_->configuration();
+    
+    // Create cv::Mat from YUV420 data
+    cv::Mat yuv(cfg.size.height * 3 / 2, cfg.size.width, CV_8UC1, memory);
+    cv::Mat bgr;
+    
+    // Convert YUV420 to BGR
+    cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+    
+    // Clone the data before unmapping
+    cv::Mat result = bgr.clone();
+    
+    // Unmap the buffer
+    munmap(memory, plane.length);
+    
+    // Resize if necessary
+    if (result.cols != width_ || result.rows != height_) {
+        cv::Mat resized;
+        cv::resize(result, resized, cv::Size(width_, height_), 0, 0, cv::INTER_LINEAR);
+        return resized;
+    }
+    
+    return result;
+}
+
 bool CameraFrameSource::getFrame(cv::Mat& frame) {
-    if (!initialized_ || !capture_) {
+    if (!initialized_ || !camera_) {
         LOG_ERROR("CameraFrameSource not initialized");
         return false;
     }
     
-    if (!capture_->isOpened()) {
-        LOG_ERROR("Camera is not opened");
-        return false;
+    // Wait for a frame with timeout
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    if (queue_cv_.wait_for(lock, std::chrono::milliseconds(500), 
+                           [this]{ return !frame_queue_.empty() || stop_capture_; })) {
+        if (!frame_queue_.empty()) {
+            frame = frame_queue_.front();
+            frame_queue_.pop();
+            return true;
+        }
     }
     
-    try {
-        // Read frame from camera
-        bool read_success = capture_->read(frame);
-        
-        if (!read_success) {
-            LOG_ERROR("Failed to read frame from camera (read() returned false)");
-            LOG_DEBUG("Camera backend: " + capture_->getBackendName());
-            return false;
-        }
-        
-        // Check if frame is valid
-        if (frame.empty()) {
-            LOG_ERROR("Camera returned empty frame");
-            LOG_DEBUG("Frame dimensions: " + std::to_string(frame.cols) + "x" + std::to_string(frame.rows));
-            return false;
-        }
-        
-        // Resize if necessary (if camera doesn't support exact resolution)
-        if (frame.cols != width_ || frame.rows != height_) {
-            LOG_DEBUG("Resizing frame from " + std::to_string(frame.cols) + "x" + 
-                     std::to_string(frame.rows) + " to " + 
-                     std::to_string(width_) + "x" + std::to_string(height_));
-            cv::Mat resized;
-            cv::resize(frame, resized, cv::Size(width_, height_), 0, 0, cv::INTER_LINEAR);
-            frame = resized;
-        }
-        
-        return true;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR("Exception while reading camera frame: " + std::string(e.what()));
-        return false;
-    }
+    LOG_ERROR("Timeout waiting for frame");
+    return false;
 }
 
 void CameraFrameSource::release() {
-    if (capture_ && capture_->isOpened()) {
-        LOG_INFO("Releasing camera: " + device_);
-        capture_->release();
+    if (!initialized_) {
+        return;
     }
-    capture_.reset();
+    
+    LOG_INFO("Releasing camera: " + device_);
+    
+    stop_capture_ = true;
+    queue_cv_.notify_all();
+    
+    if (camera_) {
+        if (camera_->state() == Camera::CameraRunning) {
+            camera_->stop();
+        }
+        camera_->requestCompleted.disconnect(this, &CameraFrameSource::onRequestComplete);
+        camera_->release();
+        camera_.reset();
+    }
+    
+    requests_.clear();
+    allocator_.reset();
+    
+    if (camera_manager_) {
+        camera_manager_->stop();
+        camera_manager_.reset();
+    }
+    
+    // Clear frame queue
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        while (!frame_queue_.empty()) {
+            frame_queue_.pop();
+        }
+    }
+    
     initialized_ = false;
 }
 
 std::string CameraFrameSource::getName() const {
-    return "CameraFrameSource: " + device_ + 
+    return "CameraFrameSource (libcamera): " + device_ + 
            " (" + std::to_string(width_) + "x" + std::to_string(height_) + 
            "@" + std::to_string(fps_) + "fps)";
 }
 
 bool CameraFrameSource::isReady() const {
-    return initialized_ && capture_ && capture_->isOpened();
+    return initialized_ && camera_ && camera_->state() == Camera::CameraRunning;
 }
 
 } // namespace TVLED
-
