@@ -1,6 +1,6 @@
 {
   "mode": "debug",
-  "input_image": "img2.png",
+  "input_image": "img.png",
   "output_directory": "output",
   
   "camera": {

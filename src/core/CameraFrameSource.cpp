@@ -96,9 +96,30 @@ bool CameraFrameSource::initialize() {
         // Warm up the camera by reading a few frames
         LOG_DEBUG("Warming up camera...");
         cv::Mat temp_frame;
-        for (int i = 0; i < 5; i++) {
-            capture_->read(temp_frame);
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        bool warmup_success = false;
+        int max_warmup_attempts = 10;
+        
+        for (int i = 0; i < max_warmup_attempts; i++) {
+            if (capture_->read(temp_frame) && !temp_frame.empty()) {
+                warmup_success = true;
+                LOG_DEBUG("Camera warmup successful on attempt " + std::to_string(i + 1));
+                break;
+            }
+            LOG_DEBUG("Warmup attempt " + std::to_string(i + 1) + " failed, retrying...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        
+        if (!warmup_success) {
+            LOG_WARN("Camera warmup did not succeed, but continuing anyway");
+            // Don't fail initialization - some cameras work despite failed warmup
+        }
+        
+        // Read a few more frames to ensure camera is stable
+        if (warmup_success) {
+            for (int i = 0; i < 3; i++) {
+                capture_->read(temp_frame);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
         }
         
         initialized_ = true;
@@ -118,16 +139,25 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
         return false;
     }
     
+    if (!capture_->isOpened()) {
+        LOG_ERROR("Camera is not opened");
+        return false;
+    }
+    
     try {
         // Read frame from camera
-        if (!capture_->read(frame)) {
-            LOG_ERROR("Failed to read frame from camera");
+        bool read_success = capture_->read(frame);
+        
+        if (!read_success) {
+            LOG_ERROR("Failed to read frame from camera (read() returned false)");
+            LOG_DEBUG("Camera backend: " + capture_->getBackendName());
             return false;
         }
         
         // Check if frame is valid
         if (frame.empty()) {
             LOG_ERROR("Camera returned empty frame");
+            LOG_DEBUG("Frame dimensions: " + std::to_string(frame.cols) + "x" + std::to_string(frame.rows));
             return false;
         }
         
