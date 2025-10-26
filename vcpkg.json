@@ -1,0 +1,12 @@
+{
+    "name": "cross-cpp-demo",
+    "version": "1.0.0",
+    "description": "Cross-platform C++ demo project with optional OpenCV support",
+    "dependencies": [
+        {
+            "name": "opencv4",
+            "features": ["contrib", "nonfree"]
+        }
+    ],
+    "builtin-baseline": "2024.01.12"
+}

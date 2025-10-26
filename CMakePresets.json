@@ -1,0 +1,114 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "Default Config",
+            "description": "Default build configuration",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_OPENCV": "OFF"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Debug build with symbols",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_OPENCV": "OFF"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Release build optimized",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_OPENCV": "OFF"
+            }
+        },
+        {
+            "name": "debug-opencv",
+            "displayName": "Debug with OpenCV",
+            "description": "Debug build with OpenCV support",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/debug-opencv",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_OPENCV": "ON"
+            }
+        },
+        {
+            "name": "release-opencv",
+            "displayName": "Release with OpenCV",
+            "description": "Release build with OpenCV support",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/release-opencv",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_OPENCV": "ON"
+            }
+        },
+        {
+            "name": "vcpkg-debug",
+            "displayName": "Debug with vcpkg",
+            "description": "Debug build using vcpkg toolchain",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/vcpkg-debug",
+            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_OPENCV": "ON"
+            }
+        },
+        {
+            "name": "vcpkg-release",
+            "displayName": "Release with vcpkg",
+            "description": "Release build using vcpkg toolchain",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/vcpkg-release",
+            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_OPENCV": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default"
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
+        {
+            "name": "debug-opencv",
+            "configurePreset": "debug-opencv"
+        },
+        {
+            "name": "release-opencv",
+            "configurePreset": "release-opencv"
+        },
+        {
+            "name": "vcpkg-debug",
+            "configurePreset": "vcpkg-debug"
+        },
+        {
+            "name": "vcpkg-release",
+            "configurePreset": "vcpkg-release"
+        }
+    ]
+}

@@ -1,0 +1,82 @@
+{
+  "mode": "debug",
+  "input_image": "img2.png",
+  "output_directory": "output",
+  
+  "camera": {
+    "device": "/dev/video0",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  
+  "hyperhdr": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 19400,
+    "priority": 100
+  },
+  
+  "led_layout": {
+    "format": "grid",
+    "grid": {
+      "rows": 5,
+      "cols": 8
+    },
+    "hyperhdr": {
+      "top": 20,
+      "bottom": 20,
+      "left": 10,
+      "right": 10
+    }
+  },
+  
+  "bezier_curves": {
+    "left_bezier": "M 4.5 208 C 124.701 122.326 193.899 79.1792 325 23",
+    "bottom_bezier": "M 4.5 208 C 259.5 443 920.5 487 1240.5 177",
+    "right_bezier": "M 917.5 9 C 1031.47 46.3381 1105.44 90.6788 1240.5 177",
+    "top_bezier": "M 325 22.9999 C 553.008 5.96442 683.045 3.95426 917.5 8.99994"
+  },
+  
+  "bezier_settings": {
+    "use_direct_bezier_curves": true,
+    "bezier_samples": 50,
+    "polygon_samples": 15
+  },
+  
+  "scaling": {
+    "scale_factor": 2.0
+  },
+  
+  "grid": {
+    "rows": 5,
+    "cols": 8
+  },
+  
+  "visualization": {
+    "grid_cell_width": 60,
+    "grid_cell_height": 40,
+    "debug_boundary_thickness": 3,
+    "debug_corner_radius": 10
+  },
+  
+  "color_settings": {
+    "show_coordinates": true,
+    "coordinate_font_scale": 0.4,
+    "border_thickness": 1
+  },
+  
+  "color_extraction": {
+    "mode": "edge_slices",
+    "horizontal_coverage_percent": 20.0,
+    "vertical_coverage_percent": 15.0,
+    "horizontal_slices": 10,
+    "vertical_slices": 8
+  },
+  
+  "performance": {
+    "target_fps": 0,
+    "enable_parallel_processing": true,
+    "parallel_chunk_size": 4
+  }
+}

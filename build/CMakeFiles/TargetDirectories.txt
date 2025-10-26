@@ -1,0 +1,4 @@
+/Users/morteza/Projects/Playground/TV/cpp/build/CMakeFiles/app.dir
+/Users/morteza/Projects/Playground/TV/cpp/build/CMakeFiles/app_legacy.dir
+/Users/morteza/Projects/Playground/TV/cpp/build/CMakeFiles/edit_cache.dir
+/Users/morteza/Projects/Playground/TV/cpp/build/CMakeFiles/rebuild_cache.dir
