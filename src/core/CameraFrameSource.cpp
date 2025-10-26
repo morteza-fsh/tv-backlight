@@ -48,9 +48,28 @@ bool CameraFrameSource::initialize() {
         capture_ = std::make_unique<cv::VideoCapture>();
         
         // Try to open the camera
-        // On Raspberry Pi, OpenCV will use V4L2 backend by default
-        if (!capture_->open(device_index, cv::CAP_ANY)) {
+        // On Raspberry Pi, try V4L2 backend first, which is most compatible
+        // For Raspberry Pi Camera Module, you may need to enable legacy camera support
+        // or use libcamera-vid to create a V4L2 device
+        bool opened = false;
+        
+        // Try V4L2 backend first (most common)
+        if (capture_->open(device_index, cv::CAP_V4L2)) {
+            LOG_INFO("Camera opened with V4L2 backend");
+            opened = true;
+        }
+        // Fallback to any available backend
+        else if (capture_->open(device_index, cv::CAP_ANY)) {
+            LOG_INFO("Camera opened with default backend");
+            opened = true;
+        }
+        
+        if (!opened) {
             LOG_ERROR("Failed to open camera device: " + device_);
+            LOG_ERROR("Make sure the camera is connected and V4L2 device exists");
+            LOG_ERROR("For Raspberry Pi Camera Module, you may need:");
+            LOG_ERROR("  1. Enable legacy camera: sudo raspi-config -> Interface Options -> Legacy Camera");
+            LOG_ERROR("  2. Or use: v4l2-ctl --list-devices to find the correct device");
             capture_.reset();
             return false;
         }
@@ -93,16 +112,21 @@ bool CameraFrameSource::initialize() {
                  std::to_string((int)actual_height) + "@" + 
                  std::to_string((int)actual_fps) + "fps");
         
-        // Warm up the camera by reading a few frames
-        LOG_DEBUG("Warming up camera...");
+        // Warm up the camera by reading frames
+        // Match picamera2 behavior: wait ~2 seconds for auto-exposure/white balance to settle
+        LOG_DEBUG("Warming up camera (allowing auto-exposure/white balance to settle)...");
         cv::Mat temp_frame;
         bool warmup_success = false;
-        int max_warmup_attempts = 10;
         
+        // First, give the camera some initial time to wake up
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        
+        // Try to get the first valid frame (up to 20 attempts over 2 seconds)
+        int max_warmup_attempts = 20;
         for (int i = 0; i < max_warmup_attempts; i++) {
             if (capture_->read(temp_frame) && !temp_frame.empty()) {
                 warmup_success = true;
-                LOG_DEBUG("Camera warmup successful on attempt " + std::to_string(i + 1));
+                LOG_DEBUG("Got first valid frame on attempt " + std::to_string(i + 1));
                 break;
             }
             LOG_DEBUG("Warmup attempt " + std::to_string(i + 1) + " failed, retrying...");
@@ -110,17 +134,27 @@ bool CameraFrameSource::initialize() {
         }
         
         if (!warmup_success) {
-            LOG_WARN("Camera warmup did not succeed, but continuing anyway");
-            // Don't fail initialization - some cameras work despite failed warmup
+            LOG_ERROR("Failed to read any frames during warmup after 2 seconds");
+            LOG_ERROR("Camera may not be functioning properly");
+            capture_.reset();
+            initialized_ = false;
+            return false;
         }
         
-        // Read a few more frames to ensure camera is stable
-        if (warmup_success) {
-            for (int i = 0; i < 3; i++) {
-                capture_->read(temp_frame);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Continue reading frames for another 1.5 seconds to allow camera to stabilize
+        // This matches the 2-second delay in the Python picamera2 code
+        LOG_DEBUG("Camera responding, continuing warmup for stabilization...");
+        auto warmup_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(1500);
+        int frames_read = 0;
+        
+        while (std::chrono::steady_clock::now() < warmup_end) {
+            if (capture_->read(temp_frame) && !temp_frame.empty()) {
+                frames_read++;
             }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
+        
+        LOG_INFO("Camera warmup complete, read " + std::to_string(frames_read) + " stabilization frames");
         
         initialized_ = true;
         return true;
