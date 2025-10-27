@@ -130,10 +130,18 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
         }
         
         // Convert YUV420 to BGR cv::Mat
-        // YUV420 layout: width*height Y plane, then width*height/4 U plane, then width*height/4 V plane
+        // rpicam-vid outputs NV12 format (not I420): Y plane, then interleaved UV
         cv::Mat yuv(height_ * 3 / 2, width_, CV_8UC1, frame_buffer_.data());
         cv::Mat bgr;
-        cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+        
+        // Try NV12 format first (most likely for rpicam-vid)
+        try {
+            cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12);
+        } catch (...) {
+            // Fallback to I420 if NV12 fails
+            LOG_WARN("NV12 conversion failed, trying I420...");
+            cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+        }
         
         // Scale down if enabled
         if (enable_scaling_) {
