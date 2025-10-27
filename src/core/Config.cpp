@@ -32,15 +32,15 @@ bool Config::loadFromFile(const std::string& filename) {
         if (j.contains("camera")) {
             auto cam = j["camera"];
             camera.device = cam.value("device", "/dev/video0");
-            camera.width = cam.value("width", 1640);
-            camera.height = cam.value("height", 1232);
-            camera.fps = cam.value("fps", 41);
+            camera.width = cam.value("width", 3280);
+            camera.height = cam.value("height", 2464);
+            camera.fps = cam.value("fps", 21);
             camera.sensor_mode = cam.value("sensor_mode", -1);
             
             // Parse scaling settings
             camera.enable_scaling = cam.value("enable_scaling", true);
-            camera.scaled_width = cam.value("scaled_width", 960);
-            camera.scaled_height = cam.value("scaled_height", 720);
+            camera.scaled_width = cam.value("scaled_width", 820);
+            camera.scaled_height = cam.value("scaled_height", 616);
         }
         
         // Parse HyperHDR settings

@@ -7,15 +7,15 @@ namespace TVLED {
 
 struct CameraConfig {
     std::string device = "/dev/video0";
-    int width = 1640;   // IMX219 2x2 binned full frame (no crop, better performance)
-    int height = 1232;  // IMX219 binned resolution
-    int fps = 41;       // Max FPS at binned resolution
+    int width = 3280;   // IMX219 native full sensor (no crop)
+    int height = 2464;  // Full resolution
+    int fps = 21;       // Max FPS at full resolution
     int sensor_mode = -1;  // -1 = auto, or specify mode number (use rpicam-hello --list-cameras to see modes)
     
     // Scaling configuration
     bool enable_scaling = true;
-    int scaled_width = 960;   // Scale down for faster processing
-    int scaled_height = 720;  // Maintains aspect ratio
+    int scaled_width = 820;   // Scale down 4x for performance
+    int scaled_height = 616;  // Maintains aspect ratio
 };
 
 struct HyperHDRConfig {
