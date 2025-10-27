@@ -81,17 +81,9 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
 }
 
 bool HyperHDRClient::sendMessage(const uint8_t* data, size_t size) {
-    // Send size header (4 bytes, big endian)
-    uint32_t msg_size = htonl(static_cast<uint32_t>(size));
-    
-    ssize_t sent = send(socket_fd_, &msg_size, sizeof(msg_size), 0);
-    if (sent != sizeof(msg_size)) {
-        LOG_ERROR("Failed to send message size header");
-        return false;
-    }
-    
-    // Send actual data
-    sent = send(socket_fd_, data, size, 0);
+    // HyperHDR expects messages in the format: size (4 bytes, big endian) + data
+    // But we're sending raw data without the size header, as HyperHDR's flatbuffer protocol handles it
+    ssize_t sent = send(socket_fd_, data, size, 0);
     if (sent != static_cast<ssize_t>(size)) {
         LOG_ERROR("Failed to send message data");
         return false;
@@ -101,63 +93,72 @@ bool HyperHDRClient::sendMessage(const uint8_t* data, size_t size) {
 }
 
 std::vector<uint8_t> HyperHDRClient::createFlatbufferMessage(const std::vector<cv::Vec3b>& colors) {
-    // HyperHDR Proto-v1 format for LED colors
-    // Header format: 
-    // - 4 bytes: type identification ("PRIO" = 0x5052494F)
-    // - 1 byte: version (0x01)
-    // - 4 bytes: priority (big endian)
-    // - 4 bytes: duration_ms (0 = infinite)
-    // - 4 bytes: priority_timeout (0 = infinite)
-    // - 4 bytes: origin (0 = manual)
-    // - 4 bytes: data size (big endian)
-    // - Variable: LED data (RGB triplets)
+    // HyperHDR uses a flatbuffer protocol for LED colors
+    // The protocol expects:
+    // 1. Size header (4 bytes, big endian) - total message size
+    // 2. Message type identifier (4 bytes) - "PRIO" = 0x5052494F
+    // 3. Version (1 byte) - protocol version (1)
+    // 4. Priority (4 bytes, big endian)
+    // 5. Duration (4 bytes, big endian, 0 = infinite)
+    // 6. Timeout (4 bytes, big endian, 0 = infinite)
+    // 7. Origin (4 bytes, big endian, 0 = manual)
+    // 8. LED count (4 bytes, big endian)
+    // 9. RGB data (3 bytes per LED)
     
-    std::vector<uint8_t> message;
+    std::vector<uint8_t> payload;
     
     // HyperHDR header: type "PRIO" (0x5052494F)
-    message.push_back(0x50); // 'P'
-    message.push_back(0x52); // 'R'
-    message.push_back(0x49); // 'I'
-    message.push_back(0x4F); // 'O'
+    payload.push_back(0x50); // 'P'
+    payload.push_back(0x52); // 'R'
+    payload.push_back(0x49); // 'I'
+    payload.push_back(0x4F); // 'O'
     
     // Version (1)
-    message.push_back(0x01);
+    payload.push_back(0x01);
     
     // Priority (4 bytes, big endian)
     uint32_t priority_be = htonl(static_cast<uint32_t>(priority_));
     const uint8_t* priority_bytes = reinterpret_cast<const uint8_t*>(&priority_be);
-    message.insert(message.end(), priority_bytes, priority_bytes + 4);
+    payload.insert(payload.end(), priority_bytes, priority_bytes + 4);
     
     // Duration (4 bytes, 0 = infinite)
     uint32_t duration = 0;
     uint32_t duration_be = htonl(duration);
     const uint8_t* duration_bytes = reinterpret_cast<const uint8_t*>(&duration_be);
-    message.insert(message.end(), duration_bytes, duration_bytes + 4);
+    payload.insert(payload.end(), duration_bytes, duration_bytes + 4);
     
     // Priority timeout (4 bytes, 0 = infinite)
     uint32_t timeout = 0;
     uint32_t timeout_be = htonl(timeout);
     const uint8_t* timeout_bytes = reinterpret_cast<const uint8_t*>(&timeout_be);
-    message.insert(message.end(), timeout_bytes, timeout_bytes + 4);
+    payload.insert(payload.end(), timeout_bytes, timeout_bytes + 4);
     
     // Origin (4 bytes, 0 = manual)
     uint32_t origin = 0;
     uint32_t origin_be = htonl(origin);
     const uint8_t* origin_bytes = reinterpret_cast<const uint8_t*>(&origin_be);
-    message.insert(message.end(), origin_bytes, origin_bytes + 4);
+    payload.insert(payload.end(), origin_bytes, origin_bytes + 4);
     
     // LED count (4 bytes, big endian)
     uint32_t led_count = static_cast<uint32_t>(colors.size());
     uint32_t led_count_be = htonl(led_count);
     const uint8_t* count_bytes = reinterpret_cast<const uint8_t*>(&led_count_be);
-    message.insert(message.end(), count_bytes, count_bytes + 4);
+    payload.insert(payload.end(), count_bytes, count_bytes + 4);
     
     // RGB data (3 bytes per LED)
     for (const auto& color : colors) {
-        message.push_back(color[0]);  // R
-        message.push_back(color[1]);  // G
-        message.push_back(color[2]);  // B
+        payload.push_back(color[0]);  // R
+        payload.push_back(color[1]);  // G
+        payload.push_back(color[2]);  // B
     }
+    
+    // Prepend size header (4 bytes, big endian)
+    std::vector<uint8_t> message;
+    uint32_t total_size = payload.size();
+    uint32_t size_be = htonl(total_size);
+    const uint8_t* size_bytes = reinterpret_cast<const uint8_t*>(&size_be);
+    message.insert(message.end(), size_bytes, size_bytes + 4);
+    message.insert(message.end(), payload.begin(), payload.end());
     
     return message;
 }
