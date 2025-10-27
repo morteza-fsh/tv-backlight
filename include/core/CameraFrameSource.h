@@ -2,25 +2,17 @@
 
 #include "core/FrameSource.h"
 #include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
 #include <string>
 #include <memory>
-#include <vector>
-#include <mutex>
-#include <condition_variable>
-#include <queue>
-
-// Forward declarations for libcamera (to avoid exposing in header)
-namespace libcamera {
-    class CameraManager;
-    class Camera;
-    class FrameBufferAllocator;
-    class Request;
-    class Stream;
-    class ControlList;
-}
+#include <cstdio>
 
 namespace TVLED {
 
+/**
+ * Simple camera frame source using rpicam-vid piped to OpenCV
+ * This is the simplest and lowest-latency approach for Raspberry Pi cameras
+ */
 class CameraFrameSource : public FrameSource {
 public:
     CameraFrameSource(const std::string& device, int width, int height, int fps);
@@ -39,24 +31,12 @@ private:
     int fps_;
     bool initialized_;
     
-    // libcamera objects
-    std::unique_ptr<libcamera::CameraManager> camera_manager_;
-    std::shared_ptr<libcamera::Camera> camera_;
-    std::unique_ptr<libcamera::FrameBufferAllocator> allocator_;
-    std::vector<std::unique_ptr<libcamera::Request>> requests_;
-    libcamera::Stream *stream_;
-    
-    // Frame queue for captured frames
-    std::queue<cv::Mat> frame_queue_;
-    std::mutex queue_mutex_;
-    std::condition_variable queue_cv_;
-    bool stop_capture_;
+    // For piped camera input
+    FILE* camera_pipe_;
+    std::vector<uint8_t> frame_buffer_;
     
     // Helper methods
     int parseCameraIndex() const;
-    void onRequestComplete(libcamera::Request *request);
-    cv::Mat convertFrameToMat(libcamera::Request *request);
 };
 
 } // namespace TVLED
-

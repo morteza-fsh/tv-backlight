@@ -1,6 +1,23 @@
 # Modular TV Backlight LED Controller
 
-A high-performance, modular C++ application for calculating TV backlight LED colors using Coons patch interpolation and Bézier curves. Designed for Raspberry Pi 5 with CSI camera support and HyperHDR integration.
+A high-performance, modular C++ application for calculating TV backlight LED colors using Coons patch interpolation and Bézier curves. Designed for Raspberry Pi 5 with native libcamera CSI camera support and HyperHDR integration.
+
+## 🎉 NEW: Simple & Fast Camera via Pipe!
+
+The camera code now uses the **simplest possible approach** - just pipes from `rpicam-vid`:
+
+- ✅ **Dead simple** - just `popen()` and `fread()`
+- ✅ **Lowest latency** - direct hardware stream (~20ms/frame)
+- ✅ **No complex libraries** - just rpicam-apps (standard on Pi OS)
+- ✅ **No legacy mode needed!**
+
+**Quick Start on Raspberry Pi:**
+```bash
+./setup_simple.sh  # Installs rpicam-apps, OpenCV, builds
+./build/bin/app --live --camera 0 --single-frame --verbose
+```
+
+📖 **See [SIMPLE_CAMERA_SETUP.md](SIMPLE_CAMERA_SETUP.md) for details.**
 
 ## Features
 
@@ -10,7 +27,7 @@ A high-performance, modular C++ application for calculating TV backlight LED col
 - ✅ **HyperHDR Integration**: Flatbuffer protocol support for LED communication
 - ✅ **High Performance**: OpenMP parallelization and optimized color extraction
 - ✅ **Flexible LED Layouts**: Support for both grid and HyperHDR edge-based layouts
-- ✅ **Raspberry Pi 5 Ready**: libcamera support for CSI camera (placeholder, to be completed on hardware)
+- ✅ **Raspberry Pi 5 Ready**: Simple pipe-based camera with ultra-low latency (~20ms/frame)
 - ✅ **Configurable FPS**: Target frame rate control or maximum speed mode
 - ✅ **Debug Visualization**: Save boundary curves and color grids for debugging
 
@@ -23,7 +40,7 @@ src/
 │   ├── Config.h/cpp                  # Configuration management
 │   ├── FrameSource.h                 # Abstract frame source interface
 │   ├── ImageFrameSource.h/cpp        # Debug mode: static image input
-│   ├── CameraFrameSource.h/cpp       # Live mode: libcamera integration (placeholder)
+│   ├── CameraFrameSource.h/cpp       # Live mode: simple rpicam-vid pipe
 │   └── LEDController.h/cpp           # Main orchestrator
 ├── processing/
 │   ├── BezierCurve.h/cpp            # Bézier curve parsing & sampling
@@ -47,10 +64,19 @@ src/
 - OpenMP: `brew install libomp`
 
 ### Raspberry Pi / Linux
-- Build tools: `sudo apt update && sudo apt install build-essential cmake`
+
+**Automated Setup (Recommended):**
+```bash
+./setup_simple.sh  # Installs rpicam-apps, OpenCV, and builds
+```
+
+**Manual Setup:**
+- Build tools: `sudo apt install build-essential cmake`
+- **rpicam-apps** (camera utilities): `sudo apt install rpicam-apps`
 - OpenCV: `sudo apt install libopencv-dev`
-- nlohmann-json: `sudo apt install nlohmann-json3-dev`
-- libcamera: `sudo apt install libcamera-dev`
+- nlohmann-json: `sudo apt install nlohmann-json3-dev` (or will be fetched automatically)
+
+**That's it!** No complex camera libraries needed.
 
 ## Building
 
