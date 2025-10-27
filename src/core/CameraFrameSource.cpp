@@ -44,7 +44,7 @@ bool CameraFrameSource::initialize() {
         int camera_index = parseCameraIndex();
         
         // Build rpicam-vid command
-        // Output raw RGB24 frames to stdout for maximum simplicity
+        // Output raw RGB frames to stdout
         std::string cmd = "rpicam-vid";
         cmd += " --camera " + std::to_string(camera_index);
         
@@ -58,7 +58,7 @@ bool CameraFrameSource::initialize() {
         cmd += " --framerate " + std::to_string(fps_);
         cmd += " --timeout 0";  // Run indefinitely
         cmd += " --nopreview";  // No preview window
-        cmd += " --codec yuv420";  // YUV420 output
+        // No codec flag - use default raw YUV420 for best quality
         cmd += " --output -";  // Output to stdout
         cmd += " --flush";  // Flush buffers for low latency
         cmd += " 2>/dev/null";  // Suppress stderr
@@ -76,10 +76,10 @@ bool CameraFrameSource::initialize() {
         LOG_INFO("Camera pipe started successfully");
         
         // Allocate frame buffer for YUV420 (1.5 bytes per pixel)
-        size_t yuv_size = width_ * height_ * 3 / 2;
-        frame_buffer_.resize(yuv_size);
+        size_t buffer_size = width_ * height_ * 3 / 2;
+        frame_buffer_.resize(buffer_size);
         
-        LOG_INFO("Frame buffer allocated: " + std::to_string(yuv_size) + " bytes");
+        LOG_INFO("Frame buffer allocated: " + std::to_string(buffer_size) + " bytes");
         
         // Wait for camera to warm up (auto-exposure, white balance)
         // Match Python picamera2 behavior
@@ -181,3 +181,4 @@ bool CameraFrameSource::isReady() const {
 }
 
 } // namespace TVLED
+
