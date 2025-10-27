@@ -153,15 +153,23 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
     float svg_height = svg_max_y - svg_min_y;
     float scale_factor = config_.scale_factor;
     
+    // Step 1: Translate to origin (normalize coordinates)
+    top_bezier_.translate(-svg_min_x, -svg_min_y);
+    right_bezier_.translate(-svg_min_x, -svg_min_y);
+    bottom_bezier_.translate(-svg_min_x, -svg_min_y);
+    left_bezier_.translate(-svg_min_x, -svg_min_y);
+    
+    // Step 2: Scale from origin
     top_bezier_.scale(scale_factor);
     right_bezier_.scale(scale_factor);
     bottom_bezier_.scale(scale_factor);
     left_bezier_.scale(scale_factor);
     
+    // Step 3: Center in image
     float scaled_width = svg_width * scale_factor;
     float scaled_height = svg_height * scale_factor;
-    float offset_x = std::max(0.0f, (imageWidth - scaled_width) / 2 - svg_min_x * scale_factor);
-    float offset_y = std::max(0.0f, (imageHeight - scaled_height) / 2 - svg_min_y * scale_factor);
+    float offset_x = (imageWidth - scaled_width) / 2.0f;
+    float offset_y = (imageHeight - scaled_height) / 2.0f;
     
     top_bezier_.translate(offset_x, offset_y);
     right_bezier_.translate(offset_x, offset_y);

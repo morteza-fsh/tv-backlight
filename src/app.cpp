@@ -404,17 +404,23 @@ int main() {
     float scale_factor = config.scale_factor;
     cout << "Scaling by factor: " << scale_factor << endl;
     
-    // Scale all boundary curves
+    // Step 1: Translate to origin (normalize coordinates)
+    for (auto& pt : top_pts) { pt.x -= svg_min_x; pt.y -= svg_min_y; }
+    for (auto& pt : right_pts) { pt.x -= svg_min_x; pt.y -= svg_min_y; }
+    for (auto& pt : bottom_pts) { pt.x -= svg_min_x; pt.y -= svg_min_y; }
+    for (auto& pt : left_pts) { pt.x -= svg_min_x; pt.y -= svg_min_y; }
+    
+    // Step 2: Scale from origin
     for (auto& pt : top_pts) pt *= scale_factor;
     for (auto& pt : right_pts) pt *= scale_factor;
     for (auto& pt : bottom_pts) pt *= scale_factor;
     for (auto& pt : left_pts) pt *= scale_factor;
     
-    // Center the scaled curves in the image
+    // Step 3: Center in image
     float scaled_width = svg_width * scale_factor;
     float scaled_height = svg_height * scale_factor;
-    float offset_x = max(0.0f, (W - scaled_width) / 2 - svg_min_x * scale_factor);
-    float offset_y = max(0.0f, (H - scaled_height) / 2 - svg_min_y * scale_factor);
+    float offset_x = (W - scaled_width) / 2.0f;
+    float offset_y = (H - scaled_height) / 2.0f;
     
     for (auto& pt : top_pts) { pt.x += offset_x; pt.y += offset_y; }
     for (auto& pt : right_pts) { pt.x += offset_x; pt.y += offset_y; }
