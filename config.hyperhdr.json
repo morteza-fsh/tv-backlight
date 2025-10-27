@@ -5,8 +5,8 @@
   
   "camera": {
     "device": "/dev/video0",
-    "width": 3840,
-    "height": 2160,
+    "width": 1920,
+    "height": 1080,
     "fps": 30,
     "enable_scaling": true,
     "scaled_width": 960,

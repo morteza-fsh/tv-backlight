@@ -32,8 +32,8 @@ bool Config::loadFromFile(const std::string& filename) {
         if (j.contains("camera")) {
             auto cam = j["camera"];
             camera.device = cam.value("device", "/dev/video0");
-            camera.width = cam.value("width", 3840);
-            camera.height = cam.value("height", 2160);
+            camera.width = cam.value("width", 1920);
+            camera.height = cam.value("height", 1080);
             camera.fps = cam.value("fps", 30);
             
             // Parse scaling settings
