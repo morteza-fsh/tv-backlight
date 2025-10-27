@@ -77,11 +77,11 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
         return false;
     }
     
-    // Create JSON message (simpler and more reliable than flatbuffer)
-    auto message = createJsonMessage(colors);
+    // Create flatbuffer-style binary message for individual LED control
+    auto message = createFlatbufferMessage(colors);
     
     // Send message
-    return sendMessage(reinterpret_cast<const uint8_t*>(message.c_str()), message.size());
+    return sendMessage(message.data(), message.size());
 }
 
 bool HyperHDRClient::sendMessage(const uint8_t* data, size_t size) {
@@ -96,38 +96,80 @@ bool HyperHDRClient::sendMessage(const uint8_t* data, size_t size) {
     return true;
 }
 
-std::string HyperHDRClient::createJsonMessage(const std::vector<cv::Vec3b>& colors) {
-    // HyperHDR JSON-RPC API for setting LED colors
-    // Note: The basic "color" command sets all LEDs to the same color
-    // For individual LED control, we'd need to use the Flatbuffer protocol or UDP
+std::vector<uint8_t> HyperHDRClient::createFlatbufferMessage(const std::vector<cv::Vec3b>& colors) {
+    // HyperHDR/Hyperion Flatbuffer protocol for individual LED colors
+    // This is a simplified implementation that works with HyperHDR's flatbuffer server
     
-    json message;
-    message["command"] = "color";
-    message["priority"] = priority_;
-    message["origin"] = "TV LED Controller";
+    std::vector<uint8_t> data;
     
-    if (!colors.empty()) {
-        // Calculate average color from all LEDs
-        int r = 0, g = 0, b = 0;
-        for (const auto& color : colors) {
-            r += color[0];
-            g += color[1];
-            b += color[2];
-        }
-        r /= colors.size();
-        g /= colors.size();
-        b /= colors.size();
-        
-        // HyperHDR expects color as an array [R, G, B]
-        message["color"] = json::array({r, g, b});
-        
-        LOG_INFO("Sending average color to HyperHDR: RGB(" + 
-                 std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ")");
+    // Build the raw LED color data (RGB triplets)
+    for (const auto& color : colors) {
+        data.push_back(color[0]);  // R
+        data.push_back(color[1]);  // G
+        data.push_back(color[2]);  // B
     }
     
-    // Convert to string with newline terminator (required by HyperHDR JSON protocol)
-    std::string json_str = message.dump() + "\n";
-    return json_str;
+    // Prepare the full message with header
+    std::vector<uint8_t> message;
+    
+    // Message format for HyperHDR flatbuffer:
+    // 4 bytes: message size (big endian)
+    // 4 bytes: magic identifier "BHDR" (0x42484452)
+    // 1 byte: message type (2 = color data)
+    // 4 bytes: priority (big endian)
+    // 4 bytes: duration in ms (0 = infinite) (big endian)
+    // 4 bytes: LED count (big endian)
+    // N*3 bytes: RGB data
+    
+    // Calculate payload size
+    uint32_t payload_size = 1 + 4 + 4 + 4 + data.size(); // type + priority + duration + count + RGB data
+    
+    // Build the payload first
+    std::vector<uint8_t> payload;
+    
+    // Message type (2 = LED colors)
+    payload.push_back(0x02);
+    
+    // Priority (4 bytes, big endian)
+    uint32_t priority_be = htonl(static_cast<uint32_t>(priority_));
+    const uint8_t* priority_bytes = reinterpret_cast<const uint8_t*>(&priority_be);
+    payload.insert(payload.end(), priority_bytes, priority_bytes + 4);
+    
+    // Duration (4 bytes, 0 = infinite, big endian)
+    uint32_t duration = 0;
+    uint32_t duration_be = htonl(duration);
+    const uint8_t* duration_bytes = reinterpret_cast<const uint8_t*>(&duration_be);
+    payload.insert(payload.end(), duration_bytes, duration_bytes + 4);
+    
+    // LED count (4 bytes, big endian)
+    uint32_t led_count = static_cast<uint32_t>(colors.size());
+    uint32_t led_count_be = htonl(led_count);
+    const uint8_t* count_bytes = reinterpret_cast<const uint8_t*>(&led_count_be);
+    payload.insert(payload.end(), count_bytes, count_bytes + 4);
+    
+    // RGB data
+    payload.insert(payload.end(), data.begin(), data.end());
+    
+    // Now build the full message with size header and magic identifier
+    
+    // Size (4 bytes, big endian) - includes magic + payload
+    uint32_t total_size = 4 + payload.size(); // magic (4 bytes) + payload
+    uint32_t size_be = htonl(total_size);
+    const uint8_t* size_bytes = reinterpret_cast<const uint8_t*>(&size_be);
+    message.insert(message.end(), size_bytes, size_bytes + 4);
+    
+    // Magic identifier "BHDR" (0x42484452)
+    message.push_back(0x42); // 'B'
+    message.push_back(0x48); // 'H'
+    message.push_back(0x44); // 'D'
+    message.push_back(0x52); // 'R'
+    
+    // Payload
+    message.insert(message.end(), payload.begin(), payload.end());
+    
+    LOG_INFO("Sending " + std::to_string(colors.size()) + " individual LED colors to HyperHDR");
+    
+    return message;
 }
 
 } // namespace TVLED

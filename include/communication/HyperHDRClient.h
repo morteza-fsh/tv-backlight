@@ -37,7 +37,7 @@ private:
     
     // Helper methods
     bool sendMessage(const uint8_t* data, size_t size);
-    std::string createJsonMessage(const std::vector<cv::Vec3b>& colors);
+    std::vector<uint8_t> createFlatbufferMessage(const std::vector<cv::Vec3b>& colors);
 };
 
 } // namespace TVLED
