@@ -98,23 +98,47 @@ bool HyperHDRClient::sendMessage(const uint8_t* data, size_t size) {
 
 std::string HyperHDRClient::createJsonMessage(const std::vector<cv::Vec3b>& colors) {
     // HyperHDR JSON-RPC API for setting LED colors
-    // This is much simpler and more reliable than the flatbuffer protocol
+    // Format follows the standard Hyperion/HyperHDR schema
     
     json message;
     message["command"] = "color";
     message["priority"] = priority_;
     message["origin"] = "TV LED Controller";
     
-    // Build LED data array
-    json led_data = json::array();
-    for (const auto& color : colors) {
-        json led_color = json::array();
-        led_color.push_back(color[0]);  // R
-        led_color.push_back(color[1]);  // G
-        led_color.push_back(color[2]);  // B
-        led_data.push_back(led_color);
+    // For individual LED control, we need to send an imagedata field
+    // But first, let's try with a single color (will use first LED color as average)
+    if (!colors.empty()) {
+        // Calculate average color from all LEDs
+        int r = 0, g = 0, b = 0;
+        for (const auto& color : colors) {
+            r += color[0];
+            g += color[1];
+            b += color[2];
+        }
+        r /= colors.size();
+        g /= colors.size();
+        b /= colors.size();
+        
+        // HyperHDR expects color as an array [R, G, B]
+        message["color"] = json::array({r, g, b});
     }
-    message["ledColors"] = led_data;
+    
+    // For individual LED control, we need to use the "image" command with LED data
+    // Adding LED data as imagedata field (this might work for individual LEDs)
+    json imagedata = json::object();
+    imagedata["width"] = static_cast<int>(colors.size());
+    imagedata["height"] = 1;
+    imagedata["format"] = "rgb";
+    
+    // Build the RGB data as a flat array
+    json rgb_data = json::array();
+    for (const auto& color : colors) {
+        rgb_data.push_back(color[0]);  // R
+        rgb_data.push_back(color[1]);  // G
+        rgb_data.push_back(color[2]);  // B
+    }
+    imagedata["data"] = rgb_data;
+    message["imagedata"] = imagedata;
     
     // Convert to string with newline terminator (required by HyperHDR JSON protocol)
     std::string json_str = message.dump() + "\n";
