@@ -98,58 +98,67 @@ bool CameraFrameSource::initialize() {
 }
 
 bool CameraFrameSource::getFrameInternal(cv::Mat& frame) {
-    // Read MJPEG frame from pipe by finding JPEG start/end markers
-    // JPEG format: starts with 0xFF 0xD8, ends with 0xFF 0xD9
-    
+    // Efficient buffered read for MJPEG stream
+    const size_t chunk_size = 8192;
     std::vector<uint8_t> jpeg_data;
     jpeg_data.reserve(frame_buffer_.size());
     
     bool found_start = false;
-    uint8_t prev_byte = 0;
+    uint8_t buffer[chunk_size];
     
-    while (jpeg_data.size() < frame_buffer_.size()) {
-        uint8_t byte;
-        size_t bytes_read = fread(&byte, 1, 1, camera_pipe_);
+    // First, find JPEG start marker (0xFF 0xD8) - read in chunks
+    while (!found_start) {
+        size_t bytes_read = fread(buffer, 1, chunk_size, camera_pipe_);
+        if (bytes_read == 0) return false;
         
-        if (bytes_read == 0) {
-            return false;  // EOF or error
-        }
-        
-        // Look for JPEG start marker (0xFF 0xD8)
-        if (!found_start && prev_byte == 0xFF && byte == 0xD8) {
-            found_start = true;
-            jpeg_data.push_back(0xFF);
-            jpeg_data.push_back(0xD8);
-            prev_byte = byte;
-            continue;
-        }
-        
-        if (found_start) {
-            jpeg_data.push_back(byte);
+        for (size_t i = 0; i < bytes_read; i++) {
+            uint8_t byte = buffer[i];
             
-            // Look for JPEG end marker (0xFF 0xD9)
-            if (prev_byte == 0xFF && byte == 0xD9) {
-                // Complete JPEG frame found
-                break;
+            // Look for JPEG start marker
+            if (!found_start && i > 0 && buffer[i-1] == 0xFF && byte == 0xD8) {
+                found_start = true;
+                jpeg_data.push_back(0xFF);
+                jpeg_data.push_back(0xD8);
+            }
+            
+            if (found_start) {
+                jpeg_data.push_back(byte);
+                
+                // Look for JPEG end marker (0xFF 0xD9)
+                if (i > 0 && buffer[i-1] == 0xFF && byte == 0xD9) {
+                    // Complete JPEG found
+                    cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+                    if (!img.empty()) {
+                        frame = img;
+                        return true;
+                    }
+                }
             }
         }
+    }
+    
+    // Continue reading until end marker if start found
+    uint8_t last_byte = jpeg_data.empty() ? 0 : jpeg_data.back();
+    
+    while (jpeg_data.size() < frame_buffer_.size()) {
+        size_t bytes_read = fread(buffer, 1, chunk_size, camera_pipe_);
+        if (bytes_read == 0) break;
         
-        prev_byte = byte;
+        for (size_t i = 0; i < bytes_read; i++) {
+            jpeg_data.push_back(buffer[i]);
+            
+            // Check for end marker
+            if (i > 0 && buffer[i-1] == 0xFF && buffer[i] == 0xD9) {
+                cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+                if (!img.empty()) {
+                    frame = img;
+                    return true;
+                }
+            }
+        }
     }
     
-    if (jpeg_data.empty()) {
-        return false;
-    }
-    
-    // Decode JPEG
-    cv::Mat jpeg_image = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
-    
-    if (jpeg_image.empty()) {
-        return false;
-    }
-    
-    frame = jpeg_image;
-    return true;
+    return false;
 }
 
 bool CameraFrameSource::getFrame(cv::Mat& frame) {
