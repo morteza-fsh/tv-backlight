@@ -58,7 +58,7 @@ bool CameraFrameSource::initialize() {
         cmd += " --framerate " + std::to_string(fps_);
         cmd += " --timeout 0";  // Run indefinitely
         cmd += " --nopreview";  // No preview window
-        cmd += " --codec yuv420";  // Raw YUV420 output
+        cmd += " --format YUV420";  // Raw YUV420 output
         cmd += " --output -";  // Output to stdout
         cmd += " --flush";  // Flush buffers for low latency
         cmd += " 2>/dev/null";  // Suppress stderr
