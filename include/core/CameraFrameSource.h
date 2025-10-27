@@ -15,7 +15,8 @@ namespace TVLED {
  */
 class CameraFrameSource : public FrameSource {
 public:
-    CameraFrameSource(const std::string& device, int width, int height, int fps);
+    CameraFrameSource(const std::string& device, int width, int height, int fps,
+                     bool enable_scaling = true, int scaled_width = 960, int scaled_height = 540);
     ~CameraFrameSource() override;
     
     bool initialize() override;
@@ -30,6 +31,11 @@ private:
     int height_;
     int fps_;
     bool initialized_;
+    
+    // Scaling configuration
+    bool enable_scaling_;
+    int scaled_width_;
+    int scaled_height_;
     
     // For piped camera input
     FILE* camera_pipe_;

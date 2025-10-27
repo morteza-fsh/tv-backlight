@@ -70,7 +70,10 @@ bool LEDController::setupFrameSource() {
             config_.camera.device,
             config_.camera.width,
             config_.camera.height,
-            config_.camera.fps
+            config_.camera.fps,
+            config_.camera.enable_scaling,
+            config_.camera.scaled_width,
+            config_.camera.scaled_height
         );
     } else {
         LOG_ERROR("Unknown mode: " + config_.mode);

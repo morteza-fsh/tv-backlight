@@ -5,9 +5,12 @@
   
   "camera": {
     "device": "/dev/video0",
-    "width": 1920,
-    "height": 1080,
-    "fps": 30
+    "width": 3840,
+    "height": 2160,
+    "fps": 30,
+    "enable_scaling": true,
+    "scaled_width": 960,
+    "scaled_height": 540
   },
   
   "hyperhdr": {

@@ -8,9 +8,11 @@
 
 namespace TVLED {
 
-CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps)
+CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps,
+                                     bool enable_scaling, int scaled_width, int scaled_height)
     : device_(device), width_(width), height_(height), fps_(fps), 
-      initialized_(false), camera_pipe_(nullptr) {
+      initialized_(false), camera_pipe_(nullptr),
+      enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height) {
 }
 
 CameraFrameSource::~CameraFrameSource() {
@@ -124,7 +126,15 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
         // Convert YUV420 to BGR cv::Mat
         // YUV420 layout: width*height Y plane, then width*height/4 U plane, then width*height/4 V plane
         cv::Mat yuv(height_ * 3 / 2, width_, CV_8UC1, frame_buffer_.data());
-        cv::cvtColor(yuv, frame, cv::COLOR_YUV2BGR_I420);
+        cv::Mat bgr;
+        cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+        
+        // Scale down if enabled
+        if (enable_scaling_) {
+            cv::resize(bgr, frame, cv::Size(scaled_width_, scaled_height_));
+        } else {
+            frame = bgr;
+        }
         
         return true;
         
@@ -151,9 +161,13 @@ void CameraFrameSource::release() {
 }
 
 std::string CameraFrameSource::getName() const {
-    return "CameraFrameSource (rpicam-vid pipe): " + device_ + 
-           " (" + std::to_string(width_) + "x" + std::to_string(height_) + 
-           "@" + std::to_string(fps_) + "fps)";
+    std::string name = "CameraFrameSource (rpicam-vid pipe): " + device_ + 
+                       " (" + std::to_string(width_) + "x" + std::to_string(height_) + 
+                       "@" + std::to_string(fps_) + "fps)";
+    if (enable_scaling_) {
+        name += " -> scaled to " + std::to_string(scaled_width_) + "x" + std::to_string(scaled_height_);
+    }
+    return name;
 }
 
 bool CameraFrameSource::isReady() const {

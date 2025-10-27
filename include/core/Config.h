@@ -7,9 +7,14 @@ namespace TVLED {
 
 struct CameraConfig {
     std::string device = "/dev/video0";
-    int width = 1920;
-    int height = 1080;
+    int width = 3840;   // 4K width
+    int height = 2160;  // 4K height
     int fps = 30;
+    
+    // Scaling configuration
+    bool enable_scaling = true;
+    int scaled_width = 960;   // Quarter of full width (540p for faster processing)
+    int scaled_height = 540;  // Quarter of full height
 };
 
 struct HyperHDRConfig {
