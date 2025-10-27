@@ -8,9 +8,9 @@
 
 namespace TVLED {
 
-CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps,
+CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps, int sensor_mode,
                                      bool enable_scaling, int scaled_width, int scaled_height)
-    : device_(device), width_(width), height_(height), fps_(fps), 
+    : device_(device), width_(width), height_(height), fps_(fps), sensor_mode_(sensor_mode),
       initialized_(false), camera_pipe_(nullptr),
       enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height) {
 }
@@ -47,6 +47,12 @@ bool CameraFrameSource::initialize() {
         // Output raw RGB24 frames to stdout for maximum simplicity
         std::string cmd = "rpicam-vid";
         cmd += " --camera " + std::to_string(camera_index);
+        
+        // Add sensor mode if specified (forces specific sensor mode to avoid cropping)
+        if (sensor_mode_ >= 0) {
+            cmd += " --mode " + std::to_string(width_) + ":" + std::to_string(height_);
+        }
+        
         cmd += " --width " + std::to_string(width_);
         cmd += " --height " + std::to_string(height_);
         cmd += " --framerate " + std::to_string(fps_);
