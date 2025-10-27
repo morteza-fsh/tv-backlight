@@ -17,7 +17,7 @@
   "hyperhdr": {
     "enabled": true,
     "host": "127.0.0.1",
-    "port": 19400,
+    "port": 19444,
     "priority": 100
   },
   
