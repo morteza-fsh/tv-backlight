@@ -20,7 +20,14 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}Step 1:${NC} Installing dependencies"
 echo "------------------------------------"
 
-sudo apt-get update -qq
+# Update package list (ignore errors from broken repos)
+sudo apt-get update 2>&1 | grep -v "Release file" || true
+
+# Remove broken uv4l repo if it exists
+sudo sed -i '/uv4l/d' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+
+# Clean up
+sudo apt-get clean
 
 # Install rpicam-apps (provides rpicam-vid)
 echo "Installing rpicam-apps (camera utilities)..."
