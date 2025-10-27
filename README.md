@@ -17,7 +17,7 @@ The camera code now uses the **simplest possible approach** - just pipes from `r
 ./build/bin/app --live --camera 0 --single-frame --verbose
 ```
 
-📖 **See [SIMPLE_CAMERA_SETUP.md](SIMPLE_CAMERA_SETUP.md) for details.**
+📖 **Quick setup:** `./setup_simple.sh` then `./build/bin/app --live --camera 0 --single-frame --verbose`
 
 ## Features
 
