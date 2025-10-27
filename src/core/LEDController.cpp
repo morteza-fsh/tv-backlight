@@ -176,6 +176,12 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
     bottom_bezier_.translate(offset_x, offset_y);
     left_bezier_.translate(offset_x, offset_y);
     
+    // Step 4: Apply manual offset adjustments
+    top_bezier_.translate(config_.offset_x, config_.offset_y);
+    right_bezier_.translate(config_.offset_x, config_.offset_y);
+    bottom_bezier_.translate(config_.offset_x, config_.offset_y);
+    left_bezier_.translate(config_.offset_x, config_.offset_y);
+    
     // Clamp to image boundaries
     top_bezier_.clamp(0, imageWidth - 1, 0, imageHeight - 1);
     right_bezier_.clamp(0, imageWidth - 1, 0, imageHeight - 1);

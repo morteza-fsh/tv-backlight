@@ -98,6 +98,8 @@ bool Config::loadFromFile(const std::string& filename) {
         if (j.contains("scaling")) {
             auto scaling = j["scaling"];
             scale_factor = scaling.value("scale_factor", 2.0f);
+            offset_x = scaling.value("offset_x", 0.0f);
+            offset_y = scaling.value("offset_y", 0.0f);
         }
         
         // Parse visualization settings

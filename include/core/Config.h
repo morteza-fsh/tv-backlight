@@ -109,6 +109,8 @@ public:
     
     // Scaling
     float scale_factor = 2.0f;
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
 };
 
 } // namespace TVLED
