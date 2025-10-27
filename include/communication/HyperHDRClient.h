@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <netinet/in.h>
 
 namespace TVLED {
 
@@ -12,7 +13,7 @@ public:
     HyperHDRClient(const std::string& host, int port, int priority = 100);
     ~HyperHDRClient();
     
-    // Connect to HyperHDR server
+    // Connect to HyperHDR server (UDP - no actual connection needed)
     bool connect();
     
     // Disconnect from server
@@ -34,10 +35,11 @@ private:
     int priority_;
     bool connected_;
     int socket_fd_;
+    sockaddr_in server_addr_;
     
     // Helper methods
-    bool sendMessage(const uint8_t* data, size_t size);
-    std::vector<uint8_t> createFlatbufferMessage(const std::vector<cv::Vec3b>& colors);
+    bool sendUDPMessage(const uint8_t* data, size_t size);
+    std::vector<uint8_t> createUDPMessage(const std::vector<cv::Vec3b>& colors);
 };
 
 } // namespace TVLED
