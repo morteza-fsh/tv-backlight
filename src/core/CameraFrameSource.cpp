@@ -58,7 +58,7 @@ bool CameraFrameSource::initialize() {
         cmd += " --framerate " + std::to_string(fps_);
         cmd += " --timeout 0";  // Run indefinitely
         cmd += " --nopreview";  // No preview window
-        cmd += " --format YUV420";  // Raw YUV420 output
+        cmd += " --codec mjpeg";  // MJPEG codec for clean output
         cmd += " --output -";  // Output to stdout
         cmd += " --flush";  // Flush buffers for low latency
         cmd += " 2>/dev/null";  // Suppress stderr
@@ -75,8 +75,8 @@ bool CameraFrameSource::initialize() {
         
         LOG_INFO("Camera pipe started successfully");
         
-        // Allocate frame buffer for YUV420 (1.5 bytes per pixel)
-        size_t buffer_size = width_ * height_ * 3 / 2;
+        // Allocate frame buffer for MJPEG (compressed, need larger buffer)
+        size_t buffer_size = width_ * height_ * 3 / 2;  // Generous buffer for compressed MJPEG
         frame_buffer_.resize(buffer_size);
         
         LOG_INFO("Frame buffer allocated: " + std::to_string(buffer_size) + " bytes");
@@ -114,34 +114,28 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
     }
     
     try {
-        // Read YUV420 frame data from pipe
+        // Read MJPEG frame data from pipe (compressed, variable size)
         size_t bytes_read = fread(frame_buffer_.data(), 1, frame_buffer_.size(), camera_pipe_);
         
-        if (bytes_read != frame_buffer_.size()) {
+        if (bytes_read == 0) {
             if (feof(camera_pipe_)) {
                 LOG_ERROR("Camera pipe ended unexpectedly (EOF)");
             } else if (ferror(camera_pipe_)) {
                 LOG_ERROR("Camera pipe read error");
-            } else {
-                LOG_ERROR("Incomplete frame read: " + std::to_string(bytes_read) + 
-                         " / " + std::to_string(frame_buffer_.size()) + " bytes");
             }
             return false;
         }
         
-        // Convert YUV420 to BGR cv::Mat
-        // rpicam-vid outputs NV12 format (not I420): Y plane, then interleaved UV
-        cv::Mat yuv(height_ * 3 / 2, width_, CV_8UC1, frame_buffer_.data());
-        cv::Mat bgr;
+        // Decode MJPEG to BGR cv::Mat
+        cv::Mat jpeg_image = cv::imdecode(cv::Mat(1, bytes_read, CV_8UC1, frame_buffer_.data()), 
+                                          cv::IMREAD_COLOR);
         
-        // Try NV12 format first (most likely for rpicam-vid)
-        try {
-            cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12);
-        } catch (...) {
-            // Fallback to I420 if NV12 fails
-            LOG_WARN("NV12 conversion failed, trying I420...");
-            cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
+        if (jpeg_image.empty()) {
+            LOG_ERROR("Failed to decode MJPEG frame");
+            return false;
         }
+        
+        cv::Mat bgr = jpeg_image;
         
         // Scale down if enabled
         if (enable_scaling_) {
