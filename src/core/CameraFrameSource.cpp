@@ -68,11 +68,12 @@ bool CameraFrameSource::initialize() {
         
         LOG_INFO("Camera pipe started successfully");
         
-        // Allocate frame buffer for MJPEG (compressed)
-        size_t buffer_size = width_ * height_;  // MJPEG is compressed
-        frame_buffer_.resize(buffer_size);
+        // Pre-allocate frame buffer for MJPEG (compressed)
+        // MJPEG typically compresses to 5-15% of raw size, reserve conservative estimate
+        size_t buffer_size = width_ * height_;  // Reserve for worst-case
+        frame_buffer_.reserve(buffer_size);
         
-        LOG_INFO("Frame buffer allocated: " + std::to_string(buffer_size) + " bytes");
+        LOG_INFO("Frame buffer capacity reserved: " + std::to_string(buffer_size) + " bytes");
         
         // Wait for camera to warm up
         LOG_DEBUG("Warming up camera (2 seconds)...");
@@ -98,19 +99,26 @@ bool CameraFrameSource::initialize() {
 }
 
 bool CameraFrameSource::getFrameInternal(cv::Mat& frame) {
-    // Efficient buffered read for MJPEG stream
+    // Reuse the frame_buffer_ to avoid repeated allocations
     const size_t chunk_size = 8192;
-    std::vector<uint8_t> jpeg_data;
-    jpeg_data.reserve(frame_buffer_.size());
+    frame_buffer_.clear();  // Clear but keep capacity
     
     uint8_t buffer[chunk_size];
     uint8_t prev_byte = 0;
     bool found_start = false;
+    int read_attempts = 0;
+    const int max_read_attempts = 1000;  // Prevent infinite loops
     
-    while (jpeg_data.size() < frame_buffer_.size()) {
+    while (read_attempts++ < max_read_attempts) {
         size_t bytes_read = fread(buffer, 1, chunk_size, camera_pipe_);
         if (bytes_read == 0) {
-            return false;  // EOF or error
+            // Check for errors vs EOF
+            if (feof(camera_pipe_)) {
+                LOG_ERROR("Camera pipe reached EOF");
+            } else if (ferror(camera_pipe_)) {
+                LOG_ERROR("Camera pipe read error");
+            }
+            return false;
         }
         
         for (size_t i = 0; i < bytes_read; i++) {
@@ -120,25 +128,26 @@ bool CameraFrameSource::getFrameInternal(cv::Mat& frame) {
                 // Look for JPEG start marker (0xFF 0xD8)
                 if (prev_byte == 0xFF && byte == 0xD8) {
                     found_start = true;
-                    jpeg_data.clear();
-                    jpeg_data.push_back(0xFF);
-                    jpeg_data.push_back(0xD8);
+                    frame_buffer_.clear();
+                    frame_buffer_.push_back(0xFF);
+                    frame_buffer_.push_back(0xD8);
                 }
             } else {
                 // Collecting JPEG data
-                jpeg_data.push_back(byte);
+                frame_buffer_.push_back(byte);
                 
                 // Look for JPEG end marker (0xFF 0xD9)
                 if (prev_byte == 0xFF && byte == 0xD9) {
                     // Complete JPEG frame found, decode it
-                    cv::Mat img = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+                    cv::Mat img = cv::imdecode(frame_buffer_, cv::IMREAD_COLOR);
                     if (!img.empty()) {
                         frame = img;
                         return true;
                     } else {
                         // Failed to decode, reset and look for next frame
+                        LOG_WARN("Failed to decode JPEG frame, size: " + std::to_string(frame_buffer_.size()));
                         found_start = false;
-                        jpeg_data.clear();
+                        frame_buffer_.clear();
                     }
                 }
             }
@@ -147,6 +156,7 @@ bool CameraFrameSource::getFrameInternal(cv::Mat& frame) {
         }
     }
     
+    LOG_ERROR("Exceeded max read attempts without finding complete frame");
     return false;
 }
 
