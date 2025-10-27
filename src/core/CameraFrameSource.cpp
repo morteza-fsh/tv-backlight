@@ -43,25 +43,18 @@ bool CameraFrameSource::initialize() {
     try {
         int camera_index = parseCameraIndex();
         
-        // Build rpicam-vid command
-        // Output raw RGB frames to stdout
-        std::string cmd = "rpicam-vid";
+        // Build libcamera-jpeg command
+        // Use libcamera-jpeg for clean single-frame capture in a loop
+        std::string cmd = "while true; do libcamera-jpeg";
         cmd += " --camera " + std::to_string(camera_index);
-        
-        // Add sensor mode if specified (forces specific sensor mode to avoid cropping)
-        if (sensor_mode_ >= 0) {
-            cmd += " --mode " + std::to_string(width_) + ":" + std::to_string(height_);
-        }
         
         cmd += " --width " + std::to_string(width_);
         cmd += " --height " + std::to_string(height_);
-        cmd += " --framerate " + std::to_string(fps_);
-        cmd += " --timeout 0";  // Run indefinitely
-        cmd += " --nopreview";  // No preview window
-        cmd += " --codec mjpeg";  // MJPEG codec for clean output
+        cmd += " --nopreview";
         cmd += " --output -";  // Output to stdout
-        cmd += " --flush";  // Flush buffers for low latency
+        cmd += " --immediate";  // Capture immediately
         cmd += " 2>/dev/null";  // Suppress stderr
+        cmd += "; done";
         
         LOG_DEBUG("Camera command: " + cmd);
         
@@ -88,10 +81,11 @@ bool CameraFrameSource::initialize() {
         
         // Discard initial frames from warmup period
         LOG_DEBUG("Discarding warmup frames...");
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 3; i++) {
+            // Read JPEG frame (variable size, look for JPEG markers)
             size_t bytes_read = fread(frame_buffer_.data(), 1, frame_buffer_.size(), camera_pipe_);
-            if (bytes_read != frame_buffer_.size()) {
-                LOG_WARN("Warmup frame " + std::to_string(i) + " incomplete");
+            if (bytes_read > 0) {
+                LOG_DEBUG("Discarded warmup frame " + std::to_string(i) + " (" + std::to_string(bytes_read) + " bytes)");
             }
         }
         
@@ -114,24 +108,40 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
     }
     
     try {
-        // Read MJPEG frame data from pipe (compressed, variable size)
-        size_t bytes_read = fread(frame_buffer_.data(), 1, frame_buffer_.size(), camera_pipe_);
+        // Read JPEG frame data from pipe
+        // libcamera-jpeg outputs complete JPEG files, find EOF markers
+        size_t total_read = 0;
+        size_t chunk_size = 8192;
         
-        if (bytes_read == 0) {
-            if (feof(camera_pipe_)) {
-                LOG_ERROR("Camera pipe ended unexpectedly (EOF)");
-            } else if (ferror(camera_pipe_)) {
-                LOG_ERROR("Camera pipe read error");
+        while (total_read < frame_buffer_.size()) {
+            size_t to_read = std::min(chunk_size, frame_buffer_.size() - total_read);
+            size_t bytes_read = fread(frame_buffer_.data() + total_read, 1, to_read, camera_pipe_);
+            
+            if (bytes_read == 0) {
+                break;
             }
+            
+            total_read += bytes_read;
+            
+            // Check for JPEG end marker (0xFF 0xD9)
+            if (total_read >= 2 && 
+                frame_buffer_[total_read - 2] == 0xFF && 
+                frame_buffer_[total_read - 1] == 0xD9) {
+                break;  // Complete JPEG found
+            }
+        }
+        
+        if (total_read == 0) {
+            LOG_ERROR("No data read from camera pipe");
             return false;
         }
         
-        // Decode MJPEG to BGR cv::Mat
-        cv::Mat jpeg_image = cv::imdecode(cv::Mat(1, bytes_read, CV_8UC1, frame_buffer_.data()), 
+        // Decode JPEG to BGR cv::Mat
+        cv::Mat jpeg_image = cv::imdecode(cv::Mat(1, total_read, CV_8UC1, frame_buffer_.data()), 
                                           cv::IMREAD_COLOR);
         
         if (jpeg_image.empty()) {
-            LOG_ERROR("Failed to decode MJPEG frame");
+            LOG_ERROR("Failed to decode JPEG frame (" + std::to_string(total_read) + " bytes read)");
             return false;
         }
         
