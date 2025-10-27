@@ -43,24 +43,23 @@ bool CameraFrameSource::initialize() {
     try {
         int camera_index = parseCameraIndex();
         
-        // Build rpicam-vid command with raw YUV420 output
+        // Build rpicam-vid command with MJPEG stream output
         std::string cmd = "rpicam-vid";
         cmd += " --camera " + std::to_string(camera_index);
-        
         cmd += " --width " + std::to_string(width_);
         cmd += " --height " + std::to_string(height_);
         cmd += " --framerate " + std::to_string(fps_);
         cmd += " --timeout 0";  // Run indefinitely
         cmd += " --nopreview";  // No preview window
-        cmd += " --codec yuv420";  // Raw YUV420 output
+        cmd += " --codec mjpeg";  // MJPEG stream
         cmd += " --output -";  // Output to stdout
-        cmd += " --flush";  // Flush buffers for low latency
         cmd += " 2>/dev/null";  // Suppress stderr
         
         LOG_DEBUG("Camera command: " + cmd);
         
         // Open pipe to camera
         camera_pipe_ = popen(cmd.c_str(), "r");
+        
         if (!camera_pipe_) {
             LOG_ERROR("Failed to start camera pipe");
             LOG_ERROR("Make sure rpicam-vid is installed: sudo apt install rpicam-apps");
@@ -69,24 +68,21 @@ bool CameraFrameSource::initialize() {
         
         LOG_INFO("Camera pipe started successfully");
         
-        // Allocate frame buffer for YUV420 (1.5 bytes per pixel)
-        size_t buffer_size = width_ * height_ * 3 / 2;
+        // Allocate frame buffer for MJPEG (compressed)
+        size_t buffer_size = width_ * height_;  // MJPEG is compressed
         frame_buffer_.resize(buffer_size);
         
         LOG_INFO("Frame buffer allocated: " + std::to_string(buffer_size) + " bytes");
         
-        // Wait for camera to warm up (auto-exposure, white balance)
-        // Match Python picamera2 behavior
-        LOG_DEBUG("Warming up camera (2 seconds for auto-exposure/white balance)...");
+        // Wait for camera to warm up
+        LOG_DEBUG("Warming up camera (2 seconds)...");
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         
-        // Discard initial frames from warmup period
+        // Discard warmup frames
         LOG_DEBUG("Discarding warmup frames...");
-        for (int i = 0; i < 10; i++) {
-            size_t bytes_read = fread(frame_buffer_.data(), 1, frame_buffer_.size(), camera_pipe_);
-            if (bytes_read != frame_buffer_.size()) {
-                LOG_WARN("Warmup frame " + std::to_string(i) + " incomplete");
-            }
+        for (int i = 0; i < 3; i++) {
+            cv::Mat dummy;
+            getFrameInternal(dummy);  // Read and discard
         }
         
         LOG_INFO("Camera warmup complete and ready");
@@ -101,6 +97,61 @@ bool CameraFrameSource::initialize() {
     }
 }
 
+bool CameraFrameSource::getFrameInternal(cv::Mat& frame) {
+    // Read MJPEG frame from pipe by finding JPEG start/end markers
+    // JPEG format: starts with 0xFF 0xD8, ends with 0xFF 0xD9
+    
+    std::vector<uint8_t> jpeg_data;
+    jpeg_data.reserve(frame_buffer_.size());
+    
+    bool found_start = false;
+    uint8_t prev_byte = 0;
+    
+    while (jpeg_data.size() < frame_buffer_.size()) {
+        uint8_t byte;
+        size_t bytes_read = fread(&byte, 1, 1, camera_pipe_);
+        
+        if (bytes_read == 0) {
+            return false;  // EOF or error
+        }
+        
+        // Look for JPEG start marker (0xFF 0xD8)
+        if (!found_start && prev_byte == 0xFF && byte == 0xD8) {
+            found_start = true;
+            jpeg_data.push_back(0xFF);
+            jpeg_data.push_back(0xD8);
+            prev_byte = byte;
+            continue;
+        }
+        
+        if (found_start) {
+            jpeg_data.push_back(byte);
+            
+            // Look for JPEG end marker (0xFF 0xD9)
+            if (prev_byte == 0xFF && byte == 0xD9) {
+                // Complete JPEG frame found
+                break;
+            }
+        }
+        
+        prev_byte = byte;
+    }
+    
+    if (jpeg_data.empty()) {
+        return false;
+    }
+    
+    // Decode JPEG
+    cv::Mat jpeg_image = cv::imdecode(jpeg_data, cv::IMREAD_COLOR);
+    
+    if (jpeg_image.empty()) {
+        return false;
+    }
+    
+    frame = jpeg_image;
+    return true;
+}
+
 bool CameraFrameSource::getFrame(cv::Mat& frame) {
     if (!initialized_ || !camera_pipe_) {
         LOG_ERROR("CameraFrameSource not initialized");
@@ -108,26 +159,11 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
     }
     
     try {
-        // Read YUV420 frame data from pipe
-        size_t bytes_read = fread(frame_buffer_.data(), 1, frame_buffer_.size(), camera_pipe_);
-        
-        if (bytes_read != frame_buffer_.size()) {
-            if (feof(camera_pipe_)) {
-                LOG_ERROR("Camera pipe ended unexpectedly (EOF)");
-            } else if (ferror(camera_pipe_)) {
-                LOG_ERROR("Camera pipe read error");
-            } else {
-                LOG_ERROR("Incomplete frame read: " + std::to_string(bytes_read) + 
-                         " / " + std::to_string(frame_buffer_.size()) + " bytes");
-            }
+        cv::Mat bgr;
+        if (!getFrameInternal(bgr)) {
+            LOG_ERROR("Failed to read frame from stream");
             return false;
         }
-        
-        // Convert YUV420 to BGR cv::Mat
-        // Use I420 format (standard YUV420p: Y plane, U plane, V plane)
-        cv::Mat yuv(height_ * 3 / 2, width_, CV_8UC1, frame_buffer_.data());
-        cv::Mat bgr;
-        cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_I420);
         
         // Scale down if enabled
         if (enable_scaling_) {

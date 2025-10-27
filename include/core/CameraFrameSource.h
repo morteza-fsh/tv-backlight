@@ -41,9 +41,11 @@ private:
     // For piped camera input
     FILE* camera_pipe_;
     std::vector<uint8_t> frame_buffer_;
+    std::string temp_file_;  // Temporary file for frame storage
     
     // Helper methods
     int parseCameraIndex() const;
+    bool getFrameInternal(cv::Mat& frame);  // Internal frame reading
 };
 
 } // namespace TVLED
