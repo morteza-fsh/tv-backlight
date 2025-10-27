@@ -49,9 +49,9 @@
   },
   
   "scaling": {
-    "scale_factor": 2.04,
-    "offset_x": -40,
-    "offset_y": -143
+    "scale_factor": 1,
+    "offset_x": -20,
+    "offset_y": -72
   },
   
   "grid": {
