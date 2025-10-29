@@ -94,7 +94,23 @@ make -j$(nproc)
 ./bin/app          # Modular version
 ```
 
-**Note**: FlatBuffer headers are automatically generated from schema files during the build process. The `flatc` compiler must be installed (see Prerequisites above). Schema files are located in `schemas/` directory.
+**Note**: FlatBuffer headers are automatically generated from schema files during the CMake configuration. The `flatc` compiler must be installed (see Prerequisites above). Schema files are located in `schemas/` directory.
+
+### Troubleshooting FlatBuffers on Raspberry Pi
+
+If CMake can't find FlatBuffers even though it's installed, run the diagnostic script:
+
+```bash
+./check_flatbuffers.sh
+```
+
+This will check:
+- ✓ `flatc` compiler installation
+- ✓ FlatBuffers header files location
+- ✓ FlatBuffers library files location
+- ✓ CMake package configuration (optional)
+
+The build system will work even if CMake package config is missing - it will automatically detect FlatBuffers manually.
 
 ## Usage
 

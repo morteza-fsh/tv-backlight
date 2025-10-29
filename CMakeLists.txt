@@ -83,7 +83,20 @@ endif()
 # Include directories
 include_directories(include)
 
-# FlatBuffers support (REQUIRED - try different package name variants)
+# FlatBuffers support (REQUIRED)
+# Step 1: Find flatc compiler (most important for header generation)
+find_program(FLATC_EXECUTABLE NAMES flatc)
+if(NOT FLATC_EXECUTABLE)
+    message(FATAL_ERROR 
+        "flatc compiler not found! This is required to build the project.\n"
+        "Please install FlatBuffers compiler:\n"
+        "  macOS: brew install flatbuffers\n"
+        "  Linux: sudo apt install flatbuffers-compiler libflatbuffers-dev\n"
+    )
+endif()
+message(STATUS "flatc compiler found: ${FLATC_EXECUTABLE}")
+
+# Step 2: Try to find FlatBuffers package (for linking)
 find_package(flatbuffers QUIET)
 if(NOT flatbuffers_FOUND)
     find_package(Flatbuffers QUIET)
@@ -94,29 +107,46 @@ if(NOT FLATBUFFERS_FOUND AND Flatbuffers_FOUND)
     set(FLATBUFFERS_FOUND ${Flatbuffers_FOUND})
 endif()
 
+# Step 3: If package not found, try manual detection (common on Debian/Ubuntu)
 if(NOT FLATBUFFERS_FOUND)
-    message(FATAL_ERROR 
-        "FlatBuffers not found! This is a required dependency.\n"
-        "Please install FlatBuffers:\n"
-        "  macOS: brew install flatbuffers\n"
-        "  Linux: sudo apt install flatbuffers-compiler libflatbuffers-dev\n"
+    message(STATUS "FlatBuffers CMake package not found, trying manual detection...")
+    
+    # Find include directory
+    find_path(FLATBUFFERS_INCLUDE_DIR 
+        NAMES flatbuffers/flatbuffers.h
+        PATHS 
+            /usr/include
+            /usr/local/include
+            /opt/homebrew/include
     )
-endif()
-
-message(STATUS "FlatBuffers package found")
-
-# Find flatc compiler (REQUIRED)
-find_program(FLATC_EXECUTABLE NAMES flatc)
-if(NOT FLATC_EXECUTABLE)
-    message(FATAL_ERROR 
-        "flatc compiler not found! This is required to build the project.\n"
-        "Please install FlatBuffers compiler:\n"
-        "  macOS: brew install flatbuffers\n"
-        "  Linux: sudo apt install flatbuffers-compiler\n"
+    
+    # Find library
+    find_library(FLATBUFFERS_LIBRARY 
+        NAMES flatbuffers
+        PATHS
+            /usr/lib
+            /usr/local/lib
+            /usr/lib/aarch64-linux-gnu
+            /usr/lib/arm-linux-gnueabihf
+            /usr/lib/x86_64-linux-gnu
+            /opt/homebrew/lib
     )
+    
+    if(FLATBUFFERS_INCLUDE_DIR AND FLATBUFFERS_LIBRARY)
+        message(STATUS "FlatBuffers found manually:")
+        message(STATUS "  Include: ${FLATBUFFERS_INCLUDE_DIR}")
+        message(STATUS "  Library: ${FLATBUFFERS_LIBRARY}")
+        set(FLATBUFFERS_FOUND TRUE)
+    else()
+        message(FATAL_ERROR 
+            "FlatBuffers library not found!\n"
+            "flatc compiler is available but library is missing.\n"
+            "Please install: sudo apt install libflatbuffers-dev\n"
+        )
+    endif()
+else()
+    message(STATUS "FlatBuffers package found via CMake")
 endif()
-
-message(STATUS "flatc compiler found: ${FLATC_EXECUTABLE}")
 
 # Define schema files
 set(FLATBUFFER_SCHEMAS
@@ -186,16 +216,24 @@ target_compile_definitions(app PRIVATE ENABLE_OPENCV)
 target_link_libraries(app nlohmann_json::nlohmann_json)
 
 # Link FlatBuffers (required)
-# Try to link with the correct library name variant
 if(TARGET flatbuffers::flatbuffers)
+    # Modern CMake target (preferred)
     target_link_libraries(app flatbuffers::flatbuffers)
+    message(STATUS "Linking FlatBuffers via CMake target: flatbuffers::flatbuffers")
 elseif(TARGET Flatbuffers::flatbuffers)
+    # Alternative CMake target name
     target_link_libraries(app Flatbuffers::flatbuffers)
+    message(STATUS "Linking FlatBuffers via CMake target: Flatbuffers::flatbuffers")
 else()
-    # Fallback: try to find the library manually
-    find_library(FLATBUFFERS_LIBRARY NAMES flatbuffers)
+    # Manual linking (used when find_package didn't work)
     if(FLATBUFFERS_LIBRARY)
         target_link_libraries(app ${FLATBUFFERS_LIBRARY})
+        message(STATUS "Linking FlatBuffers manually: ${FLATBUFFERS_LIBRARY}")
+        # Add include directory if we found it manually
+        if(FLATBUFFERS_INCLUDE_DIR)
+            target_include_directories(app PRIVATE ${FLATBUFFERS_INCLUDE_DIR})
+            message(STATUS "Adding FlatBuffers include: ${FLATBUFFERS_INCLUDE_DIR}")
+        endif()
     else()
         message(FATAL_ERROR "FlatBuffers library not found for linking!")
     endif()
