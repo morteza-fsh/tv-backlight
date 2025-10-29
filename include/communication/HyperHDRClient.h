@@ -5,11 +5,8 @@
 #include <string>
 #include <memory>
 #include <netinet/in.h>
-
-#ifdef ENABLE_FLATBUFFERS
 #include <flatbuffers/flatbuffers.h>
 #include "flatbuffer/hyperion_request_generated.h"
-#endif
 
 namespace TVLED {
 

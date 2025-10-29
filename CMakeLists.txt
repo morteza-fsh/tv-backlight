@@ -83,10 +83,7 @@ endif()
 # Include directories
 include_directories(include)
 
-# FlatBuffers support (try different package name variants)
-# Uncomment the next line to test without FlatBuffers:
-# set(FLATBUFFERS_FOUND FALSE)
-
+# FlatBuffers support (REQUIRED - try different package name variants)
 find_package(flatbuffers QUIET)
 if(NOT flatbuffers_FOUND)
     find_package(Flatbuffers QUIET)
@@ -97,63 +94,68 @@ if(NOT FLATBUFFERS_FOUND AND Flatbuffers_FOUND)
     set(FLATBUFFERS_FOUND ${Flatbuffers_FOUND})
 endif()
 
-if(FLATBUFFERS_FOUND)
-    message(STATUS "FlatBuffers package found")
-    
-    # Find flatc compiler
-    find_program(FLATC_EXECUTABLE NAMES flatc)
-    
-    if(FLATC_EXECUTABLE)
-        message(STATUS "flatc compiler found: ${FLATC_EXECUTABLE}")
-        add_definitions(-DENABLE_FLATBUFFERS)
-        
-        # Define schema files
-        set(FLATBUFFER_SCHEMAS
-            ${CMAKE_SOURCE_DIR}/schemas/hyperion_request.fbs
-            ${CMAKE_SOURCE_DIR}/schemas/hyperion_reply.fbs
-        )
-        
-        # Define output directory for generated headers
-        set(FLATBUFFER_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/include/flatbuffer)
-        file(MAKE_DIRECTORY ${FLATBUFFER_OUTPUT_DIR})
-        
-        # Generate headers immediately during CMake configuration
-        foreach(SCHEMA ${FLATBUFFER_SCHEMAS})
-            get_filename_component(SCHEMA_NAME ${SCHEMA} NAME_WE)
-            set(GENERATED_HEADER ${FLATBUFFER_OUTPUT_DIR}/${SCHEMA_NAME}_generated.h)
-            
-            # Check if header needs to be regenerated
-            if(NOT EXISTS ${GENERATED_HEADER} OR ${SCHEMA} IS_NEWER_THAN ${GENERATED_HEADER})
-                message(STATUS "Generating FlatBuffer header: ${SCHEMA_NAME}_generated.h")
-                execute_process(
-                    COMMAND ${FLATC_EXECUTABLE} --cpp -o ${FLATBUFFER_OUTPUT_DIR} ${SCHEMA}
-                    RESULT_VARIABLE FLATC_RESULT
-                    OUTPUT_VARIABLE FLATC_OUTPUT
-                    ERROR_VARIABLE FLATC_ERROR
-                )
-                if(NOT FLATC_RESULT EQUAL 0)
-                    message(WARNING "Failed to generate ${SCHEMA_NAME}_generated.h: ${FLATC_ERROR}")
-                else()
-                    message(STATUS "Successfully generated ${SCHEMA_NAME}_generated.h")
-                endif()
-            else()
-                message(STATUS "FlatBuffer header ${SCHEMA_NAME}_generated.h is up to date")
-            endif()
-        endforeach()
-        
-        # Create a custom target for flatbuffer generation (for rebuilds)
-        add_custom_target(generate_flatbuffers
-            COMMAND ${CMAKE_COMMAND} -E echo "FlatBuffer headers already generated during configuration"
-            COMMENT "FlatBuffer headers are generated during CMake configuration"
-        )
-    else()
-        message(WARNING "FlatBuffers package found but flatc compiler not found. FlatBuffers support disabled.")
-        message(WARNING "Install with: sudo apt install flatbuffers-compiler")
-    endif()
-else()
-    message(WARNING "FlatBuffers not found. HyperHDR communication will be disabled.")
-    message(WARNING "Install with: sudo apt install flatbuffers-compiler libflatbuffers-dev")
+if(NOT FLATBUFFERS_FOUND)
+    message(FATAL_ERROR 
+        "FlatBuffers not found! This is a required dependency.\n"
+        "Please install FlatBuffers:\n"
+        "  macOS: brew install flatbuffers\n"
+        "  Linux: sudo apt install flatbuffers-compiler libflatbuffers-dev\n"
+    )
 endif()
+
+message(STATUS "FlatBuffers package found")
+
+# Find flatc compiler (REQUIRED)
+find_program(FLATC_EXECUTABLE NAMES flatc)
+if(NOT FLATC_EXECUTABLE)
+    message(FATAL_ERROR 
+        "flatc compiler not found! This is required to build the project.\n"
+        "Please install FlatBuffers compiler:\n"
+        "  macOS: brew install flatbuffers\n"
+        "  Linux: sudo apt install flatbuffers-compiler\n"
+    )
+endif()
+
+message(STATUS "flatc compiler found: ${FLATC_EXECUTABLE}")
+
+# Define schema files
+set(FLATBUFFER_SCHEMAS
+    ${CMAKE_SOURCE_DIR}/schemas/hyperion_request.fbs
+    ${CMAKE_SOURCE_DIR}/schemas/hyperion_reply.fbs
+)
+
+# Define output directory for generated headers
+set(FLATBUFFER_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/include/flatbuffer)
+file(MAKE_DIRECTORY ${FLATBUFFER_OUTPUT_DIR})
+
+# Generate headers immediately during CMake configuration
+foreach(SCHEMA ${FLATBUFFER_SCHEMAS})
+    get_filename_component(SCHEMA_NAME ${SCHEMA} NAME_WE)
+    set(GENERATED_HEADER ${FLATBUFFER_OUTPUT_DIR}/${SCHEMA_NAME}_generated.h)
+    
+    # Check if header needs to be regenerated
+    if(NOT EXISTS ${GENERATED_HEADER} OR ${SCHEMA} IS_NEWER_THAN ${GENERATED_HEADER})
+        message(STATUS "Generating FlatBuffer header: ${SCHEMA_NAME}_generated.h")
+        execute_process(
+            COMMAND ${FLATC_EXECUTABLE} --cpp -o ${FLATBUFFER_OUTPUT_DIR} ${SCHEMA}
+            RESULT_VARIABLE FLATC_RESULT
+            OUTPUT_VARIABLE FLATC_OUTPUT
+            ERROR_VARIABLE FLATC_ERROR
+        )
+        if(NOT FLATC_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to generate ${SCHEMA_NAME}_generated.h: ${FLATC_ERROR}")
+        endif()
+        message(STATUS "Successfully generated ${SCHEMA_NAME}_generated.h")
+    else()
+        message(STATUS "FlatBuffer header ${SCHEMA_NAME}_generated.h is up to date")
+    endif()
+endforeach()
+
+# Create a custom target for flatbuffer generation (for rebuilds)
+add_custom_target(generate_flatbuffers
+    COMMAND ${CMAKE_COMMAND} -E echo "FlatBuffer headers already generated during configuration"
+    COMMENT "FlatBuffer headers are generated during CMake configuration"
+)
 
 # Collect all source files
 set(SOURCES
@@ -173,9 +175,7 @@ set(SOURCES
 add_executable(app ${SOURCES})
 
 # Make sure flatbuffer headers are generated before building the app
-if(FLATBUFFERS_FOUND AND FLATC_EXECUTABLE)
-    add_dependencies(app generate_flatbuffers)
-endif()
+add_dependencies(app generate_flatbuffers)
 
 # Link OpenCV
 target_link_libraries(app ${OpenCV_LIBS})
@@ -185,19 +185,19 @@ target_compile_definitions(app PRIVATE ENABLE_OPENCV)
 # Link JSON library
 target_link_libraries(app nlohmann_json::nlohmann_json)
 
-# Link FlatBuffers if found
-if(FLATBUFFERS_FOUND AND FLATC_EXECUTABLE)
-    # Try to link with the correct library name variant
-    if(TARGET flatbuffers::flatbuffers)
-        target_link_libraries(app flatbuffers::flatbuffers)
-    elseif(TARGET Flatbuffers::flatbuffers)
-        target_link_libraries(app Flatbuffers::flatbuffers)
+# Link FlatBuffers (required)
+# Try to link with the correct library name variant
+if(TARGET flatbuffers::flatbuffers)
+    target_link_libraries(app flatbuffers::flatbuffers)
+elseif(TARGET Flatbuffers::flatbuffers)
+    target_link_libraries(app Flatbuffers::flatbuffers)
+else()
+    # Fallback: try to find the library manually
+    find_library(FLATBUFFERS_LIBRARY NAMES flatbuffers)
+    if(FLATBUFFERS_LIBRARY)
+        target_link_libraries(app ${FLATBUFFERS_LIBRARY})
     else()
-        # Fallback: try to find the library manually
-        find_library(FLATBUFFERS_LIBRARY NAMES flatbuffers)
-        if(FLATBUFFERS_LIBRARY)
-            target_link_libraries(app ${FLATBUFFERS_LIBRARY})
-        endif()
+        message(FATAL_ERROR "FlatBuffers library not found for linking!")
     endif()
 endif()
 

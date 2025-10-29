@@ -83,16 +83,11 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
         return false;
     }
     
-#ifdef ENABLE_FLATBUFFERS
     // Create FlatBuffer message for LED colors
     auto message = createFlatBufferMessage(colors);
     
     // Send message via TCP
     return sendTCPMessage(message.data(), message.size());
-#else
-    LOG_WARN("FlatBuffers support not enabled. Cannot send colors to HyperHDR.");
-    return false;
-#endif
 }
 
 bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
@@ -157,7 +152,6 @@ bool HyperHDRClient::registerWithHyperHDR() {
 }
 
 std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
-#ifdef ENABLE_FLATBUFFERS
     using namespace hyperionnet;
     
     // Convert colors to RGB byte array
@@ -195,10 +189,6 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     LOG_INFO("Created FlatBuffer message with " + std::to_string(colors.size()) + " LED colors (" + std::to_string(len) + " bytes)");
     
     return std::vector<uint8_t>(buf, buf + len);
-#else
-    // Return empty vector if FlatBuffers not enabled
-    return std::vector<uint8_t>();
-#endif
 }
 
 } // namespace TVLED
