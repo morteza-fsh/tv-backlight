@@ -61,9 +61,9 @@ if(APPLE)
     set(OpenMP_C_LIB_NAMES "omp")
     set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include")
     set(OpenMP_CXX_LIB_NAMES "omp")
-    set(OpenMP_omp_LIBRARY "/opt/homebrew/opt/libomp/lib/libomp.dylib")
+    set(OpenMP_omp_LIBRARY "/opt/homebrew/Cellar/libomp/21.1.4/lib/libomp.dylib")
     # Also check /usr/local for Intel Macs
-    if(NOT EXISTS "/opt/homebrew/opt/libomp")
+    if(NOT EXISTS "/opt/homebrew/Cellar/libomp")
         set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp -I/usr/local/opt/libomp/include")
         set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/usr/local/opt/libomp/include")
         set(OpenMP_omp_LIBRARY "/usr/local/opt/libomp/lib/libomp.dylib")
@@ -73,13 +73,24 @@ endif()
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    # Temporarily disable OpenMP due to linking issues on macOS
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    message(STATUS "OpenMP linking disabled due to macOS compatibility issues")
 else()
     message(STATUS "OpenMP not found, parallel processing will be disabled")
 endif()
 
 # Include directories
 include_directories(include)
+
+# FlatBuffers support
+find_package(Flatbuffers REQUIRED)
+if(Flatbuffers_FOUND)
+    message(STATUS "FlatBuffers found: ${Flatbuffers_VERSION}")
+    add_definitions(-DENABLE_FLATBUFFERS)
+else()
+    message(STATUS "FlatBuffers not found, falling back to simple UDP protocol")
+endif()
 
 # Collect all source files
 set(SOURCES
@@ -106,26 +117,13 @@ target_compile_definitions(app PRIVATE ENABLE_OPENCV)
 # Link JSON library
 target_link_libraries(app nlohmann_json::nlohmann_json)
 
-# Link OpenMP if found
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(app OpenMP::OpenMP_CXX)
+# Link FlatBuffers if found
+if(Flatbuffers_FOUND)
+    target_link_libraries(app flatbuffers::flatbuffers)
 endif()
 
 # Set output directory
 set_target_properties(app PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-# Keep old monolithic app as app_legacy for comparison
-add_executable(app_legacy src/app.cpp)
-target_link_libraries(app_legacy ${OpenCV_LIBS})
-target_include_directories(app_legacy PRIVATE ${OpenCV_INCLUDE_DIRS})
-target_compile_definitions(app_legacy PRIVATE ENABLE_OPENCV)
-target_link_libraries(app_legacy nlohmann_json::nlohmann_json)
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(app_legacy OpenMP::OpenMP_CXX)
-endif()
-set_target_properties(app_legacy PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 

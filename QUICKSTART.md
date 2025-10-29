@@ -159,7 +159,6 @@ Common commands:
 ```bash
 ./build/bin/app --help           # Show all options
 ./build/bin/app --verbose        # Enable debug logging
-./build/bin/app_legacy           # Run original version for comparison
 ```
 
 Happy LED controlling! 🎨✨

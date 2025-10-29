@@ -90,7 +90,6 @@ make -j$(nproc)
 
 # Output binaries
 ./bin/app          # Modular version
-./bin/app_legacy   # Original monolithic version (for comparison)
 ```
 
 ## Usage
@@ -338,9 +337,6 @@ make -j4
 ```bash
 # Test with debug mode (static image)
 ./build/bin/app --debug --single-frame --save-debug --verbose
-
-# Compare with legacy version
-./build/bin/app_legacy
 
 # Check output matches
 diff output/dominant_color_grid.png output_legacy/dominant_color_grid.png

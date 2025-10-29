@@ -9,8 +9,8 @@
 
 namespace TVLED {
 
-HyperHDRClient::HyperHDRClient(const std::string& host, int port, int priority)
-    : host_(host), port_(port), priority_(priority), connected_(false), socket_fd_(-1) {
+HyperHDRClient::HyperHDRClient(const std::string& host, int port, int priority, const std::string& origin)
+    : host_(host), port_(port), priority_(priority), origin_(origin), connected_(false), socket_fd_(-1) {
     std::memset(&server_addr_, 0, sizeof(server_addr_));
 }
 
@@ -20,14 +20,14 @@ HyperHDRClient::~HyperHDRClient() {
 
 bool HyperHDRClient::connect() {
     if (connected_) {
-        LOG_WARN("Already initialized UDP connection to HyperHDR");
+        LOG_WARN("Already connected to HyperHDR");
         return true;
     }
     
-    // Create UDP socket
-    socket_fd_ = socket(AF_INET, SOCK_DGRAM, 0);
+    // Create TCP socket
+    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd_ < 0) {
-        LOG_ERROR("Failed to create UDP socket");
+        LOG_ERROR("Failed to create TCP socket");
         return false;
     }
     
@@ -42,8 +42,24 @@ bool HyperHDRClient::connect() {
         return false;
     }
     
+    // Connect to server
+    if (::connect(socket_fd_, (struct sockaddr*)&server_addr_, sizeof(server_addr_)) < 0) {
+        LOG_ERROR("Failed to connect to HyperHDR server at " + host_ + ":" + std::to_string(port_));
+        close(socket_fd_);
+        socket_fd_ = -1;
+        return false;
+    }
+    
     connected_ = true;
-    LOG_INFO("UDP connection initialized for HyperHDR at " + host_ + ":" + std::to_string(port_));
+    LOG_INFO("TCP connection established to HyperHDR at " + host_ + ":" + std::to_string(port_));
+    
+    // Register with HyperHDR
+    if (!registerWithHyperHDR()) {
+        LOG_ERROR("Failed to register with HyperHDR");
+        disconnect();
+        return false;
+    }
+    
     return true;
 }
 
@@ -67,42 +83,112 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
         return false;
     }
     
-    // Create simple UDP message for individual LED control
-    auto message = createUDPMessage(colors);
+    // Create FlatBuffer message for LED colors
+    auto message = createFlatBufferMessage(colors);
     
-    // Send message via UDP
-    return sendUDPMessage(message.data(), message.size());
+    // Send message via TCP
+    return sendTCPMessage(message.data(), message.size());
 }
 
-bool HyperHDRClient::sendUDPMessage(const uint8_t* data, size_t size) {
-    ssize_t sent = sendto(socket_fd_, data, size, 0,
-                          (struct sockaddr*)&server_addr_, sizeof(server_addr_));
+bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
+    // HyperHDR FlatBuffers server expects a length-prefix (uint32 LE) followed by the buffer
+    uint32_t len = static_cast<uint32_t>(size);
+    uint32_t le_len = len; // Convert to little endian
+    
+    // Convert to little endian manually for portability
+    uint8_t len_bytes[4];
+    len_bytes[0] = len & 0xFF;
+    len_bytes[1] = (len >> 8) & 0xFF;
+    len_bytes[2] = (len >> 16) & 0xFF;
+    len_bytes[3] = (len >> 24) & 0xFF;
+    
+    // Send length prefix
+    ssize_t sent = send(socket_fd_, len_bytes, sizeof(len_bytes), 0);
+    if (sent != sizeof(len_bytes)) {
+        LOG_ERROR("Failed to send length prefix");
+        return false;
+    }
+    
+    // Send payload
+    sent = send(socket_fd_, data, size, 0);
     if (sent != static_cast<ssize_t>(size)) {
-        LOG_ERROR("Failed to send UDP message");
+        LOG_ERROR("Failed to send FlatBuffer payload");
         return false;
     }
     
     return true;
 }
 
-std::vector<uint8_t> HyperHDRClient::createUDPMessage(const std::vector<cv::Vec3b>& colors) {
-    // HyperHDR UDP protocol is simple: just send raw RGB data
-    // Format: RGBRGBRGB... (3 bytes per LED)
-    // HyperHDR automatically maps this to your LED layout
+bool HyperHDRClient::registerWithHyperHDR() {
+    using namespace hyperionnet;
     
-    std::vector<uint8_t> message;
-    message.reserve(colors.size() * 3);
+    flatbuffers::FlatBufferBuilder fbb(1024);
     
-    // Build the raw LED color data (RGB triplets)
-    for (const auto& color : colors) {
-        message.push_back(color[0]);  // R
-        message.push_back(color[1]);  // G
-        message.push_back(color[2]);  // B
+    // Create origin string
+    auto origin_str = fbb.CreateString(origin_);
+    
+    // Create Register command
+    auto register_cmd = CreateRegister(fbb, origin_str, priority_);
+    
+    // Create Request with Register command
+    RequestBuilder req_builder(fbb);
+    req_builder.add_command_type(Command_Register);
+    req_builder.add_command(register_cmd.Union());
+    auto request = req_builder.Finish();
+    
+    fbb.Finish(request);
+    
+    // Send registration message
+    const uint8_t* buf = fbb.GetBufferPointer();
+    const size_t len = fbb.GetSize();
+    
+    if (!sendTCPMessage(buf, len)) {
+        LOG_ERROR("Failed to send registration message");
+        return false;
     }
     
-    LOG_INFO("Sending " + std::to_string(colors.size()) + " individual LED colors to HyperHDR via UDP");
+    LOG_INFO("Successfully registered with HyperHDR as '" + origin_ + "' with priority " + std::to_string(priority_));
+    return true;
+}
+
+std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
+    using namespace hyperionnet;
     
-    return message;
+    // Convert colors to RGB byte array
+    std::vector<uint8_t> rgb_data;
+    rgb_data.reserve(colors.size() * 3);
+    
+    for (const auto& color : colors) {
+        rgb_data.push_back(color[2]);  // B
+        rgb_data.push_back(color[1]);  // G  
+        rgb_data.push_back(color[0]);  // R
+    }
+    
+    // Build FlatBuffer
+    flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
+    
+    // Create RawImage with RGB data
+    auto img_data = fbb.CreateVector(rgb_data);
+    auto raw_image = CreateRawImage(fbb, img_data, colors.size(), 1);
+    
+    // Create Image with RawImage
+    auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union());
+    
+    // Create Request with Image command
+    RequestBuilder req_builder(fbb);
+    req_builder.add_command_type(Command_Image);
+    req_builder.add_command(image.Union());
+    auto request = req_builder.Finish();
+    
+    fbb.Finish(request);
+    
+    // Get the buffer
+    const uint8_t* buf = fbb.GetBufferPointer();
+    const size_t len = fbb.GetSize();
+    
+    LOG_INFO("Created FlatBuffer message with " + std::to_string(colors.size()) + " LED colors (" + std::to_string(len) + " bytes)");
+    
+    return std::vector<uint8_t>(buf, buf + len);
 }
 
 } // namespace TVLED
