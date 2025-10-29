@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <flatbuffers/flatbuffers.h>
 #include "flatbuffer/hyperion_request_generated.h"
+#include "communication/LEDLayout.h"
 
 namespace TVLED {
 
@@ -24,7 +25,8 @@ public:
     // Send LED colors to HyperHDR using FlatBuffers
     // Colors must be in RGB (R,G,B) 8-bit per channel.
     // If your source is OpenCV BGR, convert before calling.
-    bool sendColors(const std::vector<cv::Vec3b>& colors);
+    // LED layout is used to create proper 2D image structure.
+    bool sendColors(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout);
     
     // Check if connected
     bool isConnected() const { return connected_; }
@@ -44,7 +46,7 @@ private:
     // Helper methods
     bool sendTCPMessage(const uint8_t* data, size_t size);
     bool registerWithHyperHDR();
-    std::vector<uint8_t> createFlatBufferMessage(const std::vector<cv::Vec3b>& colors);
+    std::vector<uint8_t> createFlatBufferMessage(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout);
 
     static bool sendAll(int fd, const uint8_t* data, size_t size);
 };

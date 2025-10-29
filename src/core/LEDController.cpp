@@ -427,7 +427,7 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
     
     // Send to HyperHDR
     if (hyperhdr_client_ && hyperhdr_client_->isConnected()) {
-        if (hyperhdr_client_->sendColors(colors)) {
+        if (hyperhdr_client_->sendColors(colors, *led_layout_)) {
             LOG_INFO("Sent " + std::to_string(colors.size()) + " colors to HyperHDR");
         } else {
             LOG_WARN("Failed to send colors to HyperHDR");

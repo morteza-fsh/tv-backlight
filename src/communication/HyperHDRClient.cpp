@@ -110,7 +110,7 @@ void HyperHDRClient::disconnect() {
     LOG_INFO("Disconnected from HyperHDR");
 }
 
-bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
+bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout) {
     if (!connected_) {
         LOG_ERROR("Not connected to HyperHDR");
         return false;
@@ -136,7 +136,7 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
              std::to_string(colors.size()) + " LEDs being sent!");
     
     // Build FlatBuffer message for LED colors
-    auto message = createFlatBufferMessage(colors);
+    auto message = createFlatBufferMessage(colors, layout);
     if (message.empty()) {
         LOG_ERROR("FlatBuffer message creation failed");
         return false;
@@ -206,27 +206,132 @@ bool HyperHDRClient::registerWithHyperHDR() {
     return true;
 }
 
-std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
+std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout) {
     // Colors are expected to be RGB (R,G,B).
     // If your source is OpenCV BGR, convert before calling this function.
 
-    const int led_count    = static_cast<int>(colors.size());
-    const int image_width  = led_count; // 1 pixel per LED horizontally
-    const int image_height = 1;         // single row
-
+    const int led_count = static_cast<int>(colors.size());
     LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
 
-    // Pack RGB bytes
+    // Calculate reasonable image dimensions based on LED layout
+    int image_width, image_height;
+    
+    if (layout.getFormat() == LEDLayoutFormat::GRID) {
+        // For grid layout, use the actual grid dimensions
+        image_width = layout.getCols();
+        image_height = layout.getRows();
+    } else {
+        // For HyperHDR layout, create a reasonable 2D representation
+        // Calculate total perimeter and create a square-ish image
+        int top_count = layout.getTopCount();
+        int bottom_count = layout.getBottomCount();
+        int left_count = layout.getLeftCount();
+        int right_count = layout.getRightCount();
+        
+        // Calculate approximate width and height based on LED counts
+        // Use a reasonable aspect ratio and minimum dimensions
+        int total_horizontal = std::max(top_count, bottom_count);
+        int total_vertical = std::max(left_count, right_count);
+        
+        // Ensure minimum dimensions and reasonable aspect ratio
+        image_width = std::max(total_horizontal, 32);  // Minimum 32 pixels wide
+        image_height = std::max(total_vertical, 24);   // Minimum 24 pixels tall
+        
+        // Adjust to maintain reasonable aspect ratio (not too wide/tall)
+        if (image_width > image_height * 3) {
+            image_width = image_height * 3;
+        }
+        if (image_height > image_width * 3) {
+            image_height = image_width * 3;
+        }
+        
+        LOG_INFO("HyperHDR layout: T=" + std::to_string(top_count) + 
+                " B=" + std::to_string(bottom_count) + 
+                " L=" + std::to_string(left_count) + 
+                " R=" + std::to_string(right_count) +
+                " -> Image: " + std::to_string(image_width) + "x" + std::to_string(image_height));
+    }
+
+    // Create 2D image data
     std::vector<uint8_t> rgb_data;
     rgb_data.reserve(static_cast<size_t>(image_width * image_height * 3));
     
-    for (const auto& c : colors) {
-        // c = (R, G, B)
-        rgb_data.push_back(c[0]); // R
-        rgb_data.push_back(c[1]); // G
-        rgb_data.push_back(c[2]); // B
-    }
+    // Initialize with black background
+    rgb_data.resize(static_cast<size_t>(image_width * image_height * 3), 0);
     
+    // Map LED colors to appropriate positions in the 2D image
+    if (layout.getFormat() == LEDLayoutFormat::GRID) {
+        // For grid layout, map directly to grid positions
+        for (int row = 0; row < layout.getRows(); row++) {
+            for (int col = 0; col < layout.getCols(); col++) {
+                int led_idx = layout.gridToLEDIndex(row, col);
+                if (led_idx >= 0 && led_idx < led_count) {
+                    const auto& color = colors[led_idx];
+                    int pixel_idx = (row * image_width + col) * 3;
+                    rgb_data[pixel_idx + 0] = color[0]; // R
+                    rgb_data[pixel_idx + 1] = color[1]; // G
+                    rgb_data[pixel_idx + 2] = color[2]; // B
+                }
+            }
+        }
+    } else {
+        // For HyperHDR layout, map LEDs to edge positions
+        int top_count = layout.getTopCount();
+        int bottom_count = layout.getBottomCount();
+        int left_count = layout.getLeftCount();
+        int right_count = layout.getRightCount();
+        
+        int led_idx = 0;
+        
+        // Top edge (left to right)
+        for (int i = 0; i < top_count && led_idx < led_count; i++) {
+            int x = (i * image_width) / top_count;
+            int y = 0;
+            int pixel_idx = (y * image_width + x) * 3;
+            const auto& color = colors[led_idx];
+            rgb_data[pixel_idx + 0] = color[0]; // R
+            rgb_data[pixel_idx + 1] = color[1]; // G
+            rgb_data[pixel_idx + 2] = color[2]; // B
+            led_idx++;
+        }
+        
+        // Right edge (top to bottom)
+        for (int i = 0; i < right_count && led_idx < led_count; i++) {
+            int x = image_width - 1;
+            int y = (i * image_height) / right_count;
+            int pixel_idx = (y * image_width + x) * 3;
+            const auto& color = colors[led_idx];
+            rgb_data[pixel_idx + 0] = color[0]; // R
+            rgb_data[pixel_idx + 1] = color[1]; // G
+            rgb_data[pixel_idx + 2] = color[2]; // B
+            led_idx++;
+        }
+        
+        // Bottom edge (right to left)
+        for (int i = 0; i < bottom_count && led_idx < led_count; i++) {
+            int x = image_width - 1 - (i * image_width) / bottom_count;
+            int y = image_height - 1;
+            int pixel_idx = (y * image_width + x) * 3;
+            const auto& color = colors[led_idx];
+            rgb_data[pixel_idx + 0] = color[0]; // R
+            rgb_data[pixel_idx + 1] = color[1]; // G
+            rgb_data[pixel_idx + 2] = color[2]; // B
+            led_idx++;
+        }
+        
+        // Left edge (bottom to top)
+        for (int i = 0; i < left_count && led_idx < led_count; i++) {
+            int x = 0;
+            int y = image_height - 1 - (i * image_height) / left_count;
+            int pixel_idx = (y * image_width + x) * 3;
+            const auto& color = colors[led_idx];
+            rgb_data[pixel_idx + 0] = color[0]; // R
+            rgb_data[pixel_idx + 1] = color[1]; // G
+            rgb_data[pixel_idx + 2] = color[2]; // B
+            led_idx++;
+        }
+    }
+
     const size_t expected_size = static_cast<size_t>(image_width * image_height * 3);
     if (rgb_data.size() != expected_size) {
         LOG_ERROR("RGB data size mismatch: expected " + std::to_string(expected_size) + 
@@ -240,6 +345,7 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     const std::string preview = buildRgbPreview(rgb_data, 12 /*pixels*/);
     LOG_INFO(
         "RGB payload: leds=" + std::to_string(led_count) +
+        ", image=" + std::to_string(image_width) + "x" + std::to_string(image_height) +
         ", bytes=" + std::to_string(rgb_data.size()) +
         ", checksum=" + std::to_string(checksum) +
         ", preview=" + preview
