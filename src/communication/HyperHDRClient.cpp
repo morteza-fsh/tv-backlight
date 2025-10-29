@@ -121,6 +121,17 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
         return false;
     }
     
+    // Log input colors before sending
+    std::ostringstream oss;
+    oss << "sendColors() received " << colors.size() << " colors, first few: ";
+    for (size_t i = 0; i < std::min(size_t(8), colors.size()); ++i) {
+        const auto& c = colors[i];
+        oss << "[" << static_cast<int>(c[0]) << "," 
+            << static_cast<int>(c[1]) << "," 
+            << static_cast<int>(c[2]) << "] ";
+    }
+    LOG_INFO(oss.str());
+    
     // Build FlatBuffer message for LED colors
     auto message = createFlatBufferMessage(colors);
     if (message.empty()) {
