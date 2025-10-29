@@ -22,7 +22,8 @@ public:
     void disconnect();
     
     // Send LED colors to HyperHDR using FlatBuffers
-    // Colors should be in RGB format
+    // Colors must be in RGB (R, G, B) 8-bit per channel.
+    // If your source is OpenCV BGR, convert before calling.
     bool sendColors(const std::vector<cv::Vec3b>& colors);
     
     // Check if connected
@@ -44,7 +45,9 @@ private:
     bool sendTCPMessage(const uint8_t* data, size_t size);
     bool registerWithHyperHDR();
     std::vector<uint8_t> createFlatBufferMessage(const std::vector<cv::Vec3b>& colors);
+
+    // send() can return partial writes; this sends all bytes or fails.
+    static bool sendAll(int fd, const uint8_t* data, size_t size);
 };
 
 } // namespace TVLED
-

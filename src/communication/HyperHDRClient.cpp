@@ -1,13 +1,30 @@
 #include "communication/HyperHDRClient.h"
 #include "utils/Logger.h"
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+
 #include <cstring>
 #include <sstream>
 
 namespace TVLED {
+
+using namespace hyperionnet;
+
+// ---- helper: reliably send all bytes (send can return partial writes) ----
+bool HyperHDRClient::sendAll(int fd, const uint8_t* data, size_t size) {
+    size_t total = 0;
+    while (total < size) {
+        ssize_t sent = ::send(fd, data + total, size - total, 0);
+        if (sent <= 0) {
+            return false; // error or connection closed
+        }
+        total += static_cast<size_t>(sent);
+    }
+    return true;
+}
 
 HyperHDRClient::HyperHDRClient(const std::string& host, int port, int priority, const std::string& origin)
     : host_(host), port_(port), priority_(priority), origin_(origin), connected_(false), socket_fd_(-1) {
@@ -25,7 +42,7 @@ bool HyperHDRClient::connect() {
     }
     
     // Create TCP socket
-    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    socket_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd_ < 0) {
         LOG_ERROR("Failed to create TCP socket");
         return false;
@@ -33,19 +50,19 @@ bool HyperHDRClient::connect() {
     
     // Setup server address
     server_addr_.sin_family = AF_INET;
-    server_addr_.sin_port = htons(port_);
+    server_addr_.sin_port = htons(static_cast<uint16_t>(port_));
     
-    if (inet_pton(AF_INET, host_.c_str(), &server_addr_.sin_addr) <= 0) {
+    if (::inet_pton(AF_INET, host_.c_str(), &server_addr_.sin_addr) <= 0) {
         LOG_ERROR("Invalid address: " + host_);
-        close(socket_fd_);
+        ::close(socket_fd_);
         socket_fd_ = -1;
         return false;
     }
     
     // Connect to server
-    if (::connect(socket_fd_, (struct sockaddr*)&server_addr_, sizeof(server_addr_)) < 0) {
+    if (::connect(socket_fd_, reinterpret_cast<struct sockaddr*>(&server_addr_), sizeof(server_addr_)) < 0) {
         LOG_ERROR("Failed to connect to HyperHDR server at " + host_ + ":" + std::to_string(port_));
-        close(socket_fd_);
+        ::close(socket_fd_);
         socket_fd_ = -1;
         return false;
     }
@@ -65,7 +82,7 @@ bool HyperHDRClient::connect() {
 
 void HyperHDRClient::disconnect() {
     if (socket_fd_ >= 0) {
-        close(socket_fd_);
+        ::close(socket_fd_);
         socket_fd_ = -1;
     }
     connected_ = false;
@@ -83,55 +100,48 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
         return false;
     }
     
-    // Create FlatBuffer message for LED colors
+    // Build FlatBuffer message for LED colors
     auto message = createFlatBufferMessage(colors);
+    if (message.empty()) {
+        LOG_ERROR("FlatBuffer message creation failed");
+        return false;
+    }
     
     // Send message via TCP
     return sendTCPMessage(message.data(), message.size());
 }
 
 bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
-    // HyperHDR FlatBuffers server expects a length-prefix (uint32 LE) followed by the buffer
+    if (socket_fd_ < 0) {
+        LOG_ERROR("Socket is not open");
+        return false;
+    }
+
+    // HyperHDR/Hyperion FlatBuffers server expects:
+    //   4-byte length prefix in BIG-ENDIAN (network byte order) + payload
     uint32_t len = static_cast<uint32_t>(size);
-    uint32_t le_len = len; // Convert to little endian
-    
+    uint32_t be_len = htonl(len); // host → network (big-endian)
+
     LOG_INFO("Sending TCP message: payload size = " + std::to_string(size) + " bytes");
-    
-    // Convert to little endian manually for portability
-    uint8_t len_bytes[4];
-    len_bytes[0] = len & 0xFF;
-    len_bytes[1] = (len >> 8) & 0xFF;
-    len_bytes[2] = (len >> 16) & 0xFF;
-    len_bytes[3] = (len >> 24) & 0xFF;
-    
-    LOG_DEBUG("Length prefix bytes: " + std::to_string(len_bytes[0]) + " " + 
-              std::to_string(len_bytes[1]) + " " + 
-              std::to_string(len_bytes[2]) + " " + 
-              std::to_string(len_bytes[3]));
-    
-    // Send length prefix
-    ssize_t sent = send(socket_fd_, len_bytes, sizeof(len_bytes), 0);
-    if (sent != sizeof(len_bytes)) {
-        LOG_ERROR("Failed to send length prefix: sent " + std::to_string(sent) + " bytes");
+
+    // Send length prefix (big-endian)
+    if (!sendAll(socket_fd_, reinterpret_cast<const uint8_t*>(&be_len), sizeof(be_len))) {
+        LOG_ERROR("Failed to send length prefix");
         return false;
     }
-    
-    LOG_INFO("Length prefix sent successfully");
-    
-    // Send payload
-    sent = send(socket_fd_, data, size, 0);
-    if (sent != static_cast<ssize_t>(size)) {
-        LOG_ERROR("Failed to send FlatBuffer payload: sent " + std::to_string(sent) + " of " + std::to_string(size) + " bytes");
+    LOG_DEBUG("Length prefix (big-endian) sent successfully");
+
+    // Send payload (handle partial writes)
+    if (!sendAll(socket_fd_, data, size)) {
+        LOG_ERROR("Failed to send FlatBuffer payload");
         return false;
     }
-    
+
     LOG_INFO("FlatBuffer payload sent successfully");
     return true;
 }
 
 bool HyperHDRClient::registerWithHyperHDR() {
-    using namespace hyperionnet;
-    
     flatbuffers::FlatBufferBuilder fbb(1024);
     
     // Create origin string
@@ -162,67 +172,46 @@ bool HyperHDRClient::registerWithHyperHDR() {
 }
 
 std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
-    using namespace hyperionnet;
-    
-    // Debug: Log the actual LED count and data size
-    int led_count = static_cast<int>(colors.size());
+    // Colors are expected to be RGB (R, G, B) per header comment.
+    // If your source is OpenCV BGR, convert before calling this function.
+
+    const int led_count   = static_cast<int>(colors.size());
+    const int image_width = led_count;  // 1 pixel per LED horizontally
+    const int image_height = 1;         // single row
+
     LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
-    
-    // Try a different approach: instead of using RawImage, let's try using
-    // the Color command for LED data. The Color command might be more appropriate
-    // for setting LED colors rather than sending image data
-    
-    // However, the Color command is for a single color, not multiple LEDs
-    // So we need to find a different approach
-    
-    // Let me try a different approach: create a RawImage that represents
-    // the LED layout in a way that HyperHDR can understand
-    
-    // The issue might be that HyperHDR is expecting the RawImage to represent
-    // actual image dimensions that match the LED layout configuration
-    // Let's try creating a RawImage that matches the LED layout configuration
-    
-    // For LED strips, we typically have a single row of LEDs
-    // But we need to be careful about the dimensions to avoid the frame size issue
-    
-    // Try a more conservative approach: create a small 2D image
-    // that represents the LED layout in a way HyperHDR can understand
-    
-    int image_width = led_count;   // Each LED gets one pixel width
-    int image_height = 1;          // Single row of LEDs
-    
-    // Create RGB image data (3 bytes per pixel)
+
+    // Pack RGB bytes
     std::vector<uint8_t> rgb_data;
-    rgb_data.reserve(image_width * image_height * 3);
+    rgb_data.reserve(static_cast<size_t>(image_width * image_height * 3));
     
-    for (const auto& color : colors) {
-        rgb_data.push_back(color[2]);  // B
-        rgb_data.push_back(color[1]);  // G  
-        rgb_data.push_back(color[0]);  // R
+    for (const auto& c : colors) {
+        // c = (R, G, B) as documented
+        rgb_data.push_back(c[0]); // R
+        rgb_data.push_back(c[1]); // G
+        rgb_data.push_back(c[2]); // B
     }
     
-    LOG_INFO("RGB data size: " + std::to_string(rgb_data.size()) + " bytes");
-    LOG_INFO("Image dimensions: " + std::to_string(image_width) + "x" + std::to_string(image_height));
-    
-    // Verify the data size is reasonable
-    size_t expected_size = image_width * image_height * 3;
+    const size_t expected_size = static_cast<size_t>(image_width * image_height * 3);
     if (rgb_data.size() != expected_size) {
         LOG_ERROR("RGB data size mismatch: expected " + std::to_string(expected_size) + 
                   ", got " + std::to_string(rgb_data.size()));
-        return std::vector<uint8_t>();
+        return {};
     }
-    
-    // Build FlatBuffer
+
+    // Build FlatBuffer: RawImage -> Image -> Request(Command_Image)
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
     
-    // Create RawImage with proper dimensions
-    auto img_data = fbb.CreateVector(rgb_data);
+    auto img_data  = fbb.CreateVector(rgb_data);
     auto raw_image = CreateRawImage(fbb, img_data, image_width, image_height);
     
-    // Create Image with RawImage
-    auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union());
+    ImageBuilder image_builder(fbb);
+    image_builder.add_type(ImageType_RawImage);
+    image_builder.add_image(raw_image.Union());
+    // If your generated Image table supports priority, you can add it:
+    // image_builder.add_priority(priority_);
+    auto image = image_builder.Finish();
     
-    // Create Request with Image command
     RequestBuilder req_builder(fbb);
     req_builder.add_command_type(Command_Image);
     req_builder.add_command(image.Union());
@@ -230,7 +219,6 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     
     fbb.Finish(request);
     
-    // Get the buffer
     const uint8_t* buf = fbb.GetBufferPointer();
     const size_t len = fbb.GetSize();
     
@@ -240,4 +228,3 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
 }
 
 } // namespace TVLED
-
