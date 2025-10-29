@@ -62,6 +62,7 @@ src/
 - OpenCV: `brew install opencv`
 - nlohmann-json: `brew install nlohmann-json`
 - OpenMP: `brew install libomp`
+- FlatBuffers: `brew install flatbuffers`
 
 ### Raspberry Pi / Linux
 
@@ -75,6 +76,7 @@ src/
 - **rpicam-apps** (camera utilities): `sudo apt install rpicam-apps`
 - OpenCV: `sudo apt install libopencv-dev`
 - nlohmann-json: `sudo apt install nlohmann-json3-dev` (or will be fetched automatically)
+- FlatBuffers: `sudo apt install flatbuffers-compiler libflatbuffers-dev`
 
 **That's it!** No complex camera libraries needed.
 
@@ -91,6 +93,8 @@ make -j$(nproc)
 # Output binaries
 ./bin/app          # Modular version
 ```
+
+**Note**: FlatBuffer headers are automatically generated from schema files during the build process. The `flatc` compiler must be installed (see Prerequisites above). Schema files are located in `schemas/` directory.
 
 ## Usage
 
@@ -251,8 +255,9 @@ The `config.json` file controls all aspects of the application:
 
 **HyperHDRClient** - HyperHDR communication
 - TCP socket connection
-- Flatbuffer protocol serialization (simplified version)
+- Flatbuffer protocol serialization (auto-generated from schemas)
 - Automatic reconnection handling
+- Schema files in `schemas/` directory (see `schemas/README.md`)
 
 ### Utilities
 
@@ -311,6 +316,7 @@ sudo apt update
 sudo apt install build-essential cmake
 sudo apt install libopencv-dev nlohmann-json3-dev
 sudo apt install libcamera-dev
+sudo apt install flatbuffers-compiler libflatbuffers-dev
 
 # Build
 mkdir build && cd build
@@ -350,6 +356,12 @@ diff output/dominant_color_grid.png output_legacy/dominant_color_grid.png
 ```bash
 brew install nlohmann-json  # macOS
 sudo apt install nlohmann-json3-dev  # Linux
+```
+
+**FlatBuffers not found**:
+```bash
+brew install flatbuffers  # macOS
+sudo apt install flatbuffers-compiler libflatbuffers-dev  # Linux
 ```
 
 **OpenMP not found**:

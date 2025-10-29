@@ -37,6 +37,10 @@ sudo apt-get install -y rpicam-apps
 echo "Installing OpenCV..."
 sudo apt-get install -y libopencv-dev
 
+# Install FlatBuffers (for HyperHDR communication)
+echo "Installing FlatBuffers..."
+sudo apt-get install -y flatbuffers-compiler libflatbuffers-dev
+
 # Install build tools
 echo "Installing build tools..."
 sudo apt-get install -y cmake build-essential

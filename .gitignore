@@ -100,3 +100,6 @@ release/
 
 
 img.png
+
+# Generated flatbuffer headers
+include/flatbuffer/*_generated.h

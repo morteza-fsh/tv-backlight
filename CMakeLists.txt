@@ -88,6 +88,42 @@ find_package(Flatbuffers REQUIRED)
 if(Flatbuffers_FOUND)
     message(STATUS "FlatBuffers found: ${Flatbuffers_VERSION}")
     add_definitions(-DENABLE_FLATBUFFERS)
+    
+    # Find flatc compiler
+    find_program(FLATC_EXECUTABLE NAMES flatc REQUIRED)
+    message(STATUS "flatc compiler found: ${FLATC_EXECUTABLE}")
+    
+    # Define schema files
+    set(FLATBUFFER_SCHEMAS
+        ${CMAKE_SOURCE_DIR}/schemas/hyperion_request.fbs
+        ${CMAKE_SOURCE_DIR}/schemas/hyperion_reply.fbs
+    )
+    
+    # Define output directory for generated headers
+    set(FLATBUFFER_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/include/flatbuffer)
+    file(MAKE_DIRECTORY ${FLATBUFFER_OUTPUT_DIR})
+    
+    # Generate headers from schema files
+    set(FLATBUFFER_GENERATED_HEADERS)
+    foreach(SCHEMA ${FLATBUFFER_SCHEMAS})
+        get_filename_component(SCHEMA_NAME ${SCHEMA} NAME_WE)
+        set(GENERATED_HEADER ${FLATBUFFER_OUTPUT_DIR}/${SCHEMA_NAME}_generated.h)
+        list(APPEND FLATBUFFER_GENERATED_HEADERS ${GENERATED_HEADER})
+        
+        add_custom_command(
+            OUTPUT ${GENERATED_HEADER}
+            COMMAND ${FLATC_EXECUTABLE} --cpp -o ${FLATBUFFER_OUTPUT_DIR} ${SCHEMA}
+            DEPENDS ${SCHEMA}
+            COMMENT "Generating FlatBuffer header for ${SCHEMA_NAME}"
+            VERBATIM
+        )
+    endforeach()
+    
+    # Create a custom target for flatbuffer generation
+    add_custom_target(generate_flatbuffers
+        DEPENDS ${FLATBUFFER_GENERATED_HEADERS}
+        COMMENT "Generating all FlatBuffer headers"
+    )
 else()
     message(STATUS "FlatBuffers not found, falling back to simple UDP protocol")
 endif()
@@ -108,6 +144,11 @@ set(SOURCES
 
 # Add executables
 add_executable(app ${SOURCES})
+
+# Make sure flatbuffer headers are generated before building the app
+if(Flatbuffers_FOUND)
+    add_dependencies(app generate_flatbuffers)
+endif()
 
 # Link OpenCV
 target_link_libraries(app ${OpenCV_LIBS})
