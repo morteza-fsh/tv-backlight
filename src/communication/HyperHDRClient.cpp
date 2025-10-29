@@ -154,9 +154,20 @@ bool HyperHDRClient::registerWithHyperHDR() {
 std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
     using namespace hyperionnet;
     
-    // Convert colors to RGB byte array
+    // Debug: Log the actual LED count and data size
+    int led_count = static_cast<int>(colors.size());
+    LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
+    
+    // For LED data, we need to create a proper image representation
+    // HyperHDR expects LED data as a 2D image where each pixel represents an LED
+    // We'll create a simple layout: arrange LEDs in a single row
+    
+    int image_width = led_count;
+    int image_height = 1;
+    
+    // Create RGB image data (3 bytes per pixel)
     std::vector<uint8_t> rgb_data;
-    rgb_data.reserve(colors.size() * 3);
+    rgb_data.reserve(image_width * image_height * 3);
     
     for (const auto& color : colors) {
         rgb_data.push_back(color[2]);  // B
@@ -164,12 +175,15 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         rgb_data.push_back(color[0]);  // R
     }
     
+    LOG_INFO("RGB data size: " + std::to_string(rgb_data.size()) + " bytes");
+    LOG_INFO("Image dimensions: " + std::to_string(image_width) + "x" + std::to_string(image_height));
+    
     // Build FlatBuffer
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
     
-    // Create RawImage with RGB data
+    // Create RawImage with proper dimensions
     auto img_data = fbb.CreateVector(rgb_data);
-    auto raw_image = CreateRawImage(fbb, img_data, colors.size(), 1);
+    auto raw_image = CreateRawImage(fbb, img_data, image_width, image_height);
     
     // Create Image with RawImage
     auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union());
