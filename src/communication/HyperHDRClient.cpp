@@ -288,7 +288,8 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             }
         }
     } else {
-        // For HyperHDR layout, map LEDs to thick edge positions (10 pixels thick)
+        // For HyperHDR layout, map LEDs to edge positions as 10x10 adjacent squares
+        // Direction: top-left → top-right → bottom-right → bottom-left
         int top_count = layout.getTopCount();
         int bottom_count = layout.getBottomCount();
         int left_count = layout.getLeftCount();
@@ -296,17 +297,18 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         
         int led_idx = 0;
         
-        // Top edge (left to right) - 10 pixels thick
+        // Top edge (left to right) - 10x10 squares along the top
         for (int i = 0; i < top_count && led_idx < led_count; i++) {
-            int x = (i * image_width) / top_count;
             const auto& color = colors[led_idx];
+            int x_start = i * 10;  // Each LED gets a 10-pixel wide square
+            int y_start = 0;        // Top edge
             
-            // Create a thick horizontal strip at the top
+            // Fill 10x10 square
             for (int dy = 0; dy < 10; dy++) {
-                for (int dx = -5; dx < 5; dx++) {
-                    int px = x + dx;
-                    int py = dy;
-                    if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
+                for (int dx = 0; dx < 10; dx++) {
+                    int px = x_start + dx;
+                    int py = y_start + dy;
+                    if (px < image_width && py < image_height) {
                         int pixel_idx = (py * image_width + px) * 3;
                         rgb_data[pixel_idx + 0] = color[0]; // R
                         rgb_data[pixel_idx + 1] = color[1]; // G
@@ -317,37 +319,39 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             led_idx++;
         }
         
-        // Right edge (top to bottom) - 10 pixels thick
+        // Right edge (top to bottom) - 10x10 squares along the right
         for (int i = 0; i < right_count && led_idx < led_count; i++) {
-            int y = (i * image_height) / right_count;
             const auto& color = colors[led_idx];
+            int x_start = image_width - 10;  // Right edge (10 pixels from right)
+            int y_start = i * 10;             // Each LED gets a 10-pixel tall square
             
-            // Create a thick vertical strip on the right
-            for (int dx = 0; dx < 10; dx++) {
-                for (int dy = -5; dy < 5; dy++) {
-                    int px = image_width - 1 - dx;
-                    int py = y + dy;
-                    if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
-                        int pixel_idx = (py * image_width + px) * 3;
-                        rgb_data[pixel_idx + 0] = color[0]; // R
-                        rgb_data[pixel_idx + 1] = color[1]; // G
-                        rgb_data[pixel_idx + 2] = color[2]; // B
-                    }
-                }
-            }
-            led_idx++;
-        }
-        
-        // Bottom edge (right to left) - 10 pixels thick
-        for (int i = 0; i < bottom_count && led_idx < led_count; i++) {
-            int x = image_width - 1 - (i * image_width) / bottom_count;
-            const auto& color = colors[led_idx];
-            
-            // Create a thick horizontal strip at the bottom
+            // Fill 10x10 square
             for (int dy = 0; dy < 10; dy++) {
-                for (int dx = -5; dx < 5; dx++) {
-                    int px = x + dx;
-                    int py = image_height - 1 - dy;
+                for (int dx = 0; dx < 10; dx++) {
+                    int px = x_start + dx;
+                    int py = y_start + dy;
+                    if (px >= 0 && px < image_width && py < image_height) {
+                        int pixel_idx = (py * image_width + px) * 3;
+                        rgb_data[pixel_idx + 0] = color[0]; // R
+                        rgb_data[pixel_idx + 1] = color[1]; // G
+                        rgb_data[pixel_idx + 2] = color[2]; // B
+                    }
+                }
+            }
+            led_idx++;
+        }
+        
+        // Bottom edge (right to left) - 10x10 squares along the bottom
+        for (int i = 0; i < bottom_count && led_idx < led_count; i++) {
+            const auto& color = colors[led_idx];
+            int x_start = image_width - 10 - (i * 10);  // Right to left
+            int y_start = image_height - 10;             // Bottom edge
+            
+            // Fill 10x10 square
+            for (int dy = 0; dy < 10; dy++) {
+                for (int dx = 0; dx < 10; dx++) {
+                    int px = x_start + dx;
+                    int py = y_start + dy;
                     if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
                         int pixel_idx = (py * image_width + px) * 3;
                         rgb_data[pixel_idx + 0] = color[0]; // R
@@ -359,16 +363,17 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             led_idx++;
         }
         
-        // Left edge (bottom to top) - 10 pixels thick
+        // Left edge (bottom to top) - 10x10 squares along the left
         for (int i = 0; i < left_count && led_idx < led_count; i++) {
-            int y = image_height - 1 - (i * image_height) / left_count;
             const auto& color = colors[led_idx];
+            int x_start = 0;                              // Left edge
+            int y_start = image_height - 10 - (i * 10);  // Bottom to top
             
-            // Create a thick vertical strip on the left
-            for (int dx = 0; dx < 10; dx++) {
-                for (int dy = -5; dy < 5; dy++) {
-                    int px = dx;
-                    int py = y + dy;
+            // Fill 10x10 square
+            for (int dy = 0; dy < 10; dy++) {
+                for (int dx = 0; dx < 10; dx++) {
+                    int px = x_start + dx;
+                    int py = y_start + dy;
                     if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
                         int pixel_idx = (py * image_width + px) * 3;
                         rgb_data[pixel_idx + 0] = color[0]; // R
