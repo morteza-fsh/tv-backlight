@@ -13,6 +13,27 @@ namespace TVLED {
 
 using namespace hyperionnet;
 
+namespace {
+// Build a compact preview of the first N RGB pixels: [r,g,b] [r,g,b] ...
+static std::string buildRgbPreview(const std::vector<uint8_t>& rgbBytes, size_t maxPixels) {
+    const size_t totalPixels = rgbBytes.size() / 3;
+    const size_t previewPixels = std::min(maxPixels, totalPixels);
+    std::ostringstream oss;
+    for (size_t i = 0; i < previewPixels; ++i) {
+        const size_t base = i * 3;
+        const int r = static_cast<int>(rgbBytes[base + 0]);
+        const int g = static_cast<int>(rgbBytes[base + 1]);
+        const int b = static_cast<int>(rgbBytes[base + 2]);
+        if (i > 0) oss << ' ';
+        oss << '[' << r << ',' << g << ',' << b << ']';
+    }
+    if (previewPixels < totalPixels) {
+        oss << " ...";
+    }
+    return oss.str();
+}
+}
+
 // ---- helper: reliably send all bytes (send can return partial writes) ----
 bool HyperHDRClient::sendAll(int fd, const uint8_t* data, size_t size) {
     size_t total = 0;
@@ -198,6 +219,17 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
                   ", got " + std::to_string(rgb_data.size()));
         return {};
     }
+
+    // Log a brief summary of the RGB payload to verify correctness
+    uint64_t checksum = 0;
+    for (uint8_t v : rgb_data) checksum += static_cast<uint64_t>(v);
+    const std::string preview = buildRgbPreview(rgb_data, 12 /*pixels*/);
+    LOG_INFO(
+        "RGB payload: leds=" + std::to_string(led_count) +
+        ", bytes=" + std::to_string(rgb_data.size()) +
+        ", checksum=" + std::to_string(checksum) +
+        ", preview=" + preview
+    );
 
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
     
