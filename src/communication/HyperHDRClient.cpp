@@ -132,6 +132,9 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors) {
     }
     LOG_INFO(oss.str());
     
+    LOG_WARN("⚠️  IMPORTANT: Ensure HyperHDR LED layout config matches the " + 
+             std::to_string(colors.size()) + " LEDs being sent!");
+    
     // Build FlatBuffer message for LED colors
     auto message = createFlatBufferMessage(colors);
     if (message.empty()) {
@@ -258,8 +261,8 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     auto img_data  = fbb.CreateVector(rgb_data);
     auto raw_image = CreateRawImage(fbb, img_data, image_width, image_height);
     
-    // Create Image using factory (NO builder; your schema doesn't have add_* fields)
-    auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union());
+    // Create Image with explicit duration field set to -1 (infinite)
+    auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union(), -1);
     
     // Wrap into a Request(Command_Image)
     RequestBuilder req_builder(fbb);
@@ -267,6 +270,7 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     req_builder.add_command(image.Union());
     auto request = req_builder.Finish();
     
+    // Finish with no file identifier (Hyperion doesn't use one)
     fbb.Finish(request);
     
     const uint8_t* buf = fbb.GetBufferPointer();
@@ -277,7 +281,17 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     // Log FlatBuffer structure info
     LOG_DEBUG("FlatBuffer details: width=" + std::to_string(image_width) + 
               ", height=" + std::to_string(image_height) + 
-              ", image_type=RawImage, command=Image");
+              ", image_type=RawImage, command=Image, duration=-1");
+    
+    // Dump the first 64 bytes of the FlatBuffer message for debugging
+    std::ostringstream fb_hex;
+    fb_hex << "FlatBuffer first 64 bytes (hex): ";
+    for (size_t i = 0; i < std::min(size_t(64), len); ++i) {
+        char hex_buf[4];
+        snprintf(hex_buf, sizeof(hex_buf), "%02X ", buf[i]);
+        fb_hex << hex_buf;
+    }
+    LOG_DEBUG(fb_hex.str());
     
     return std::vector<uint8_t>(buf, buf + len);
 }
