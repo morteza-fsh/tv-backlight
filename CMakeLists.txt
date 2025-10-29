@@ -84,6 +84,9 @@ endif()
 include_directories(include)
 
 # FlatBuffers support (try different package name variants)
+# Uncomment the next line to test without FlatBuffers:
+# set(FLATBUFFERS_FOUND FALSE)
+
 find_package(flatbuffers QUIET)
 if(NOT flatbuffers_FOUND)
     find_package(Flatbuffers QUIET)
@@ -114,26 +117,34 @@ if(FLATBUFFERS_FOUND)
         set(FLATBUFFER_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/include/flatbuffer)
         file(MAKE_DIRECTORY ${FLATBUFFER_OUTPUT_DIR})
         
-        # Generate headers from schema files
-        set(FLATBUFFER_GENERATED_HEADERS)
+        # Generate headers immediately during CMake configuration
         foreach(SCHEMA ${FLATBUFFER_SCHEMAS})
             get_filename_component(SCHEMA_NAME ${SCHEMA} NAME_WE)
             set(GENERATED_HEADER ${FLATBUFFER_OUTPUT_DIR}/${SCHEMA_NAME}_generated.h)
-            list(APPEND FLATBUFFER_GENERATED_HEADERS ${GENERATED_HEADER})
             
-            add_custom_command(
-                OUTPUT ${GENERATED_HEADER}
-                COMMAND ${FLATC_EXECUTABLE} --cpp -o ${FLATBUFFER_OUTPUT_DIR} ${SCHEMA}
-                DEPENDS ${SCHEMA}
-                COMMENT "Generating FlatBuffer header for ${SCHEMA_NAME}"
-                VERBATIM
-            )
+            # Check if header needs to be regenerated
+            if(NOT EXISTS ${GENERATED_HEADER} OR ${SCHEMA} IS_NEWER_THAN ${GENERATED_HEADER})
+                message(STATUS "Generating FlatBuffer header: ${SCHEMA_NAME}_generated.h")
+                execute_process(
+                    COMMAND ${FLATC_EXECUTABLE} --cpp -o ${FLATBUFFER_OUTPUT_DIR} ${SCHEMA}
+                    RESULT_VARIABLE FLATC_RESULT
+                    OUTPUT_VARIABLE FLATC_OUTPUT
+                    ERROR_VARIABLE FLATC_ERROR
+                )
+                if(NOT FLATC_RESULT EQUAL 0)
+                    message(WARNING "Failed to generate ${SCHEMA_NAME}_generated.h: ${FLATC_ERROR}")
+                else()
+                    message(STATUS "Successfully generated ${SCHEMA_NAME}_generated.h")
+                endif()
+            else()
+                message(STATUS "FlatBuffer header ${SCHEMA_NAME}_generated.h is up to date")
+            endif()
         endforeach()
         
-        # Create a custom target for flatbuffer generation
+        # Create a custom target for flatbuffer generation (for rebuilds)
         add_custom_target(generate_flatbuffers
-            DEPENDS ${FLATBUFFER_GENERATED_HEADERS}
-            COMMENT "Generating all FlatBuffer headers"
+            COMMAND ${CMAKE_COMMAND} -E echo "FlatBuffer headers already generated during configuration"
+            COMMENT "FlatBuffer headers are generated during CMake configuration"
         )
     else()
         message(WARNING "FlatBuffers package found but flatc compiler not found. FlatBuffers support disabled.")
