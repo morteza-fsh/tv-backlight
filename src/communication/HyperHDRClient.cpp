@@ -95,6 +95,8 @@ bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
     uint32_t len = static_cast<uint32_t>(size);
     uint32_t le_len = len; // Convert to little endian
     
+    LOG_INFO("Sending TCP message: payload size = " + std::to_string(size) + " bytes");
+    
     // Convert to little endian manually for portability
     uint8_t len_bytes[4];
     len_bytes[0] = len & 0xFF;
@@ -102,20 +104,28 @@ bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
     len_bytes[2] = (len >> 16) & 0xFF;
     len_bytes[3] = (len >> 24) & 0xFF;
     
+    LOG_DEBUG("Length prefix bytes: " + std::to_string(len_bytes[0]) + " " + 
+              std::to_string(len_bytes[1]) + " " + 
+              std::to_string(len_bytes[2]) + " " + 
+              std::to_string(len_bytes[3]));
+    
     // Send length prefix
     ssize_t sent = send(socket_fd_, len_bytes, sizeof(len_bytes), 0);
     if (sent != sizeof(len_bytes)) {
-        LOG_ERROR("Failed to send length prefix");
+        LOG_ERROR("Failed to send length prefix: sent " + std::to_string(sent) + " bytes");
         return false;
     }
+    
+    LOG_INFO("Length prefix sent successfully");
     
     // Send payload
     sent = send(socket_fd_, data, size, 0);
     if (sent != static_cast<ssize_t>(size)) {
-        LOG_ERROR("Failed to send FlatBuffer payload");
+        LOG_ERROR("Failed to send FlatBuffer payload: sent " + std::to_string(sent) + " of " + std::to_string(size) + " bytes");
         return false;
     }
     
+    LOG_INFO("FlatBuffer payload sent successfully");
     return true;
 }
 
@@ -158,12 +168,28 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     int led_count = static_cast<int>(colors.size());
     LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
     
-    // For LED data, we need to create a proper image representation
-    // HyperHDR expects LED data as a 2D image where each pixel represents an LED
-    // We'll create a simple layout: arrange LEDs in a single row
+    // Try a different approach: instead of using RawImage, let's try using
+    // the Color command for LED data. The Color command might be more appropriate
+    // for setting LED colors rather than sending image data
     
-    int image_width = led_count;
-    int image_height = 1;
+    // However, the Color command is for a single color, not multiple LEDs
+    // So we need to find a different approach
+    
+    // Let me try a different approach: create a RawImage that represents
+    // the LED layout in a way that HyperHDR can understand
+    
+    // The issue might be that HyperHDR is expecting the RawImage to represent
+    // actual image dimensions that match the LED layout configuration
+    // Let's try creating a RawImage that matches the LED layout configuration
+    
+    // For LED strips, we typically have a single row of LEDs
+    // But we need to be careful about the dimensions to avoid the frame size issue
+    
+    // Try a more conservative approach: create a small 2D image
+    // that represents the LED layout in a way HyperHDR can understand
+    
+    int image_width = led_count;   // Each LED gets one pixel width
+    int image_height = 1;          // Single row of LEDs
     
     // Create RGB image data (3 bytes per pixel)
     std::vector<uint8_t> rgb_data;
@@ -177,6 +203,14 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     
     LOG_INFO("RGB data size: " + std::to_string(rgb_data.size()) + " bytes");
     LOG_INFO("Image dimensions: " + std::to_string(image_width) + "x" + std::to_string(image_height));
+    
+    // Verify the data size is reasonable
+    size_t expected_size = image_width * image_height * 3;
+    if (rgb_data.size() != expected_size) {
+        LOG_ERROR("RGB data size mismatch: expected " + std::to_string(expected_size) + 
+                  ", got " + std::to_string(rgb_data.size()));
+        return std::vector<uint8_t>();
+    }
     
     // Build FlatBuffer
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
