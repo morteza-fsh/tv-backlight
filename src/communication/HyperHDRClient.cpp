@@ -172,11 +172,11 @@ bool HyperHDRClient::registerWithHyperHDR() {
 }
 
 std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<cv::Vec3b>& colors) {
-    // Colors are expected to be RGB (R, G, B) per header comment.
+    // Colors are expected to be RGB (R,G,B).
     // If your source is OpenCV BGR, convert before calling this function.
 
-    const int led_count   = static_cast<int>(colors.size());
-    const int image_width = led_count;  // 1 pixel per LED horizontally
+    const int led_count    = static_cast<int>(colors.size());
+    const int image_width  = led_count; // 1 pixel per LED horizontally
     const int image_height = 1;         // single row
 
     LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
@@ -186,7 +186,7 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     rgb_data.reserve(static_cast<size_t>(image_width * image_height * 3));
     
     for (const auto& c : colors) {
-        // c = (R, G, B) as documented
+        // c = (R, G, B)
         rgb_data.push_back(c[0]); // R
         rgb_data.push_back(c[1]); // G
         rgb_data.push_back(c[2]); // B
@@ -199,19 +199,16 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         return {};
     }
 
-    // Build FlatBuffer: RawImage -> Image -> Request(Command_Image)
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
     
+    // Create RawImage (schema variant without pixelFormat/stride)
     auto img_data  = fbb.CreateVector(rgb_data);
     auto raw_image = CreateRawImage(fbb, img_data, image_width, image_height);
     
-    ImageBuilder image_builder(fbb);
-    image_builder.add_type(ImageType_RawImage);
-    image_builder.add_image(raw_image.Union());
-    // If your generated Image table supports priority, you can add it:
-    // image_builder.add_priority(priority_);
-    auto image = image_builder.Finish();
+    // Create Image using factory (NO builder; your schema doesn't have add_* fields)
+    auto image = CreateImage(fbb, ImageType_RawImage, raw_image.Union());
     
+    // Wrap into a Request(Command_Image)
     RequestBuilder req_builder(fbb);
     req_builder.add_command_type(Command_Image);
     req_builder.add_command(image.Union());
