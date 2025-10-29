@@ -213,43 +213,33 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     const int led_count = static_cast<int>(colors.size());
     LOG_INFO("Creating FlatBuffer message for " + std::to_string(led_count) + " LEDs");
 
-    // Calculate reasonable image dimensions based on LED layout
+    // Calculate image dimensions based on LED layout (10 pixels per LED)
     int image_width, image_height;
     
     if (layout.getFormat() == LEDLayoutFormat::GRID) {
-        // For grid layout, use 10x the actual grid dimensions
+        // For grid layout, use 10 pixels per LED cell
         image_width = layout.getCols() * 10;
         image_height = layout.getRows() * 10;
     } else {
-        // For HyperHDR layout, create a 10x larger 2D representation
-        // Calculate total perimeter and create a square-ish image
+        // For HyperHDR layout, calculate dimensions based on LED counts
+        // Each LED occupies a 10x10 pixel square
         int top_count = layout.getTopCount();
         int bottom_count = layout.getBottomCount();
         int left_count = layout.getLeftCount();
         int right_count = layout.getRightCount();
         
-        // Calculate approximate width and height based on LED counts
-        // Use a reasonable aspect ratio and minimum dimensions (10x larger)
-        int total_horizontal = std::max(top_count, bottom_count);
-        int total_vertical = std::max(left_count, right_count);
-        
-        // Ensure minimum dimensions and reasonable aspect ratio (10x larger)
-        image_width = std::max(total_horizontal * 10, 320);  // Minimum 320 pixels wide (10x 32)
-        image_height = std::max(total_vertical * 10, 240);   // Minimum 240 pixels tall (10x 24)
-        
-        // Adjust to maintain reasonable aspect ratio (not too wide/tall)
-        if (image_width > image_height * 3) {
-            image_width = image_height * 3;
-        }
-        if (image_height > image_width * 3) {
-            image_height = image_width * 3;
-        }
+        // Width is determined by the maximum of top or bottom LED count
+        // Height is determined by the maximum of left or right LED count
+        // Each LED = 10 pixels
+        image_width = std::max(top_count, bottom_count) * 10;
+        image_height = std::max(left_count, right_count) * 10;
         
         LOG_INFO("HyperHDR layout: T=" + std::to_string(top_count) + 
                 " B=" + std::to_string(bottom_count) + 
                 " L=" + std::to_string(left_count) + 
                 " R=" + std::to_string(right_count) +
-                " -> Image: " + std::to_string(image_width) + "x" + std::to_string(image_height) + " (10x larger)");
+                " -> Image: " + std::to_string(image_width) + "x" + std::to_string(image_height) + 
+                " (" + std::to_string(image_width/10) + "x" + std::to_string(image_height/10) + " LEDs @ 10px each)");
     }
 
     // Create 2D image data
