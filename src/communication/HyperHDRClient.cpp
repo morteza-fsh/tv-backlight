@@ -241,6 +241,16 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         ", checksum=" + std::to_string(checksum) +
         ", preview=" + preview
     );
+    
+    // Dump first 48 raw bytes in hex for debugging
+    std::ostringstream hex_dump;
+    hex_dump << "First 48 bytes (hex): ";
+    for (size_t i = 0; i < std::min(size_t(48), rgb_data.size()); ++i) {
+        char buf[4];
+        snprintf(buf, sizeof(buf), "%02X ", rgb_data[i]);
+        hex_dump << buf;
+    }
+    LOG_DEBUG(hex_dump.str());
 
     flatbuffers::FlatBufferBuilder fbb(1024 + rgb_data.size());
     
@@ -263,6 +273,11 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     const size_t len = fbb.GetSize();
     
     LOG_INFO("Created FlatBuffer message with " + std::to_string(colors.size()) + " LED colors (" + std::to_string(len) + " bytes)");
+    
+    // Log FlatBuffer structure info
+    LOG_DEBUG("FlatBuffer details: width=" + std::to_string(image_width) + 
+              ", height=" + std::to_string(image_height) + 
+              ", image_type=RawImage, command=Image");
     
     return std::vector<uint8_t>(buf, buf + len);
 }
