@@ -19,7 +19,9 @@
     "host": "127.0.0.1",
     "port": 19400,
     "priority": 100,
-    "use_linear_format": true
+    "use_linear_format": false,
+    "use_udp": true,
+    "udp_port": 19446
   },
   
   "led_layout": {

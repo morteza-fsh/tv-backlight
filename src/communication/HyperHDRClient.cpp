@@ -47,8 +47,8 @@ bool HyperHDRClient::sendAll(int fd, const uint8_t* data, size_t size) {
     return true;
 }
 
-HyperHDRClient::HyperHDRClient(const std::string& host, int port, int priority, const std::string& origin)
-    : host_(host), port_(port), priority_(priority), origin_(origin), connected_(false), socket_fd_(-1) {
+HyperHDRClient::HyperHDRClient(const std::string& host, int port, int priority, const std::string& origin, bool use_udp, int udp_port)
+    : host_(host), port_(port), priority_(priority), origin_(origin), use_udp_(use_udp), udp_port_(udp_port), connected_(false), socket_fd_(-1) {
     std::memset(&server_addr_, 0, sizeof(server_addr_));
 }
 
@@ -62,43 +62,67 @@ bool HyperHDRClient::connect() {
         return true;
     }
     
-    // Create TCP socket
-    socket_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd_ < 0) {
-        LOG_ERROR("Failed to create TCP socket");
-        return false;
+    if (use_udp_) {
+        // Create UDP socket
+        socket_fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
+        if (socket_fd_ < 0) {
+            LOG_ERROR("Failed to create UDP socket");
+            return false;
+        }
+        
+        // Setup server address for UDP
+        server_addr_.sin_family = AF_INET;
+        server_addr_.sin_port = htons(static_cast<uint16_t>(udp_port_));
+        
+        if (::inet_pton(AF_INET, host_.c_str(), &server_addr_.sin_addr) <= 0) {
+            LOG_ERROR("Invalid address: " + host_);
+            ::close(socket_fd_);
+            socket_fd_ = -1;
+            return false;
+        }
+        
+        connected_ = true;
+        LOG_INFO("UDP socket created for HyperHDR RAW mode at " + host_ + ":" + std::to_string(udp_port_));
+        return true;
+    } else {
+        // Create TCP socket
+        socket_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (socket_fd_ < 0) {
+            LOG_ERROR("Failed to create TCP socket");
+            return false;
+        }
+        
+        // Setup server address
+        server_addr_.sin_family = AF_INET;
+        server_addr_.sin_port = htons(static_cast<uint16_t>(port_));
+        
+        if (::inet_pton(AF_INET, host_.c_str(), &server_addr_.sin_addr) <= 0) {
+            LOG_ERROR("Invalid address: " + host_);
+            ::close(socket_fd_);
+            socket_fd_ = -1;
+            return false;
+        }
+        
+        // Connect to server
+        if (::connect(socket_fd_, reinterpret_cast<struct sockaddr*>(&server_addr_), sizeof(server_addr_)) < 0) {
+            LOG_ERROR("Failed to connect to HyperHDR server at " + host_ + ":" + std::to_string(port_));
+            ::close(socket_fd_);
+            socket_fd_ = -1;
+            return false;
+        }
+        
+        connected_ = true;
+        LOG_INFO("TCP connection established to HyperHDR at " + host_ + ":" + std::to_string(port_));
+        
+        // Register with HyperHDR (TCP only)
+        if (!registerWithHyperHDR()) {
+            LOG_ERROR("Failed to register with HyperHDR");
+            disconnect();
+            return false;
+        }
+        
+        return true;
     }
-    
-    // Setup server address
-    server_addr_.sin_family = AF_INET;
-    server_addr_.sin_port = htons(static_cast<uint16_t>(port_));
-    
-    if (::inet_pton(AF_INET, host_.c_str(), &server_addr_.sin_addr) <= 0) {
-        LOG_ERROR("Invalid address: " + host_);
-        ::close(socket_fd_);
-        socket_fd_ = -1;
-        return false;
-    }
-    
-    // Connect to server
-    if (::connect(socket_fd_, reinterpret_cast<struct sockaddr*>(&server_addr_), sizeof(server_addr_)) < 0) {
-        LOG_ERROR("Failed to connect to HyperHDR server at " + host_ + ":" + std::to_string(port_));
-        ::close(socket_fd_);
-        socket_fd_ = -1;
-        return false;
-    }
-    
-    connected_ = true;
-    LOG_INFO("TCP connection established to HyperHDR at " + host_ + ":" + std::to_string(port_));
-    
-    // Register with HyperHDR
-    if (!registerWithHyperHDR()) {
-        LOG_ERROR("Failed to register with HyperHDR");
-        disconnect();
-        return false;
-    }
-    
-    return true;
 }
 
 void HyperHDRClient::disconnect() {
@@ -132,18 +156,35 @@ bool HyperHDRClient::sendColors(const std::vector<cv::Vec3b>& colors, const LEDL
     }
     LOG_INFO(oss.str());
     
-    LOG_WARN("⚠️  IMPORTANT: Ensure HyperHDR LED layout config matches the " + 
-             std::to_string(colors.size()) + " LEDs being sent!");
-    
-    // Build FlatBuffer message for LED colors
-    auto message = createFlatBufferMessage(colors, layout);
-    if (message.empty()) {
-        LOG_ERROR("FlatBuffer message creation failed");
-        return false;
+    if (use_udp_) {
+        // UDP RAW mode: send simple RGB bytes (R0,G0,B0, R1,G1,B1, ...)
+        std::vector<uint8_t> rgb_bytes;
+        rgb_bytes.reserve(colors.size() * 3);
+        for (const auto& color : colors) {
+            rgb_bytes.push_back(color[0]); // R
+            rgb_bytes.push_back(color[1]); // G
+            rgb_bytes.push_back(color[2]); // B
+        }
+        
+        LOG_INFO("Sending UDP RAW message: " + std::to_string(rgb_bytes.size()) + " bytes for " + 
+                 std::to_string(colors.size()) + " LEDs");
+        
+        return sendUDPMessage(rgb_bytes.data(), rgb_bytes.size());
+    } else {
+        // TCP FlatBuffers mode
+        LOG_WARN("⚠️  IMPORTANT: Ensure HyperHDR LED layout config matches the " + 
+                 std::to_string(colors.size()) + " LEDs being sent!");
+        
+        // Build FlatBuffer message for LED colors
+        auto message = createFlatBufferMessage(colors, layout);
+        if (message.empty()) {
+            LOG_ERROR("FlatBuffer message creation failed");
+            return false;
+        }
+        
+        // Send message via TCP
+        return sendTCPMessage(message.data(), message.size());
     }
-    
-    // Send message via TCP
-    return sendTCPMessage(message.data(), message.size());
 }
 
 bool HyperHDRClient::sendColorsLinear(const std::vector<cv::Vec3b>& colors) {
@@ -168,17 +209,34 @@ bool HyperHDRClient::sendColorsLinear(const std::vector<cv::Vec3b>& colors) {
     }
     LOG_INFO(oss.str());
     
-    LOG_INFO("Using linear format: 1 pixel tall, " + std::to_string(colors.size()) + " pixels wide");
-    
-    // Build FlatBuffer message for LED colors in linear format
-    auto message = createFlatBufferMessageLinear(colors);
-    if (message.empty()) {
-        LOG_ERROR("FlatBuffer message creation failed");
-        return false;
+    if (use_udp_) {
+        // UDP RAW mode: send simple RGB bytes (R0,G0,B0, R1,G1,B1, ...)
+        std::vector<uint8_t> rgb_bytes;
+        rgb_bytes.reserve(colors.size() * 3);
+        for (const auto& color : colors) {
+            rgb_bytes.push_back(color[0]); // R
+            rgb_bytes.push_back(color[1]); // G
+            rgb_bytes.push_back(color[2]); // B
+        }
+        
+        LOG_INFO("Sending UDP RAW message (linear): " + std::to_string(rgb_bytes.size()) + " bytes for " + 
+                 std::to_string(colors.size()) + " LEDs");
+        
+        return sendUDPMessage(rgb_bytes.data(), rgb_bytes.size());
+    } else {
+        // TCP FlatBuffers mode
+        LOG_INFO("Using linear format: 1 pixel tall, " + std::to_string(colors.size()) + " pixels wide");
+        
+        // Build FlatBuffer message for LED colors in linear format
+        auto message = createFlatBufferMessageLinear(colors);
+        if (message.empty()) {
+            LOG_ERROR("FlatBuffer message creation failed");
+            return false;
+        }
+        
+        // Send message via TCP
+        return sendTCPMessage(message.data(), message.size());
     }
-    
-    // Send message via TCP
-    return sendTCPMessage(message.data(), message.size());
 }
 
 bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
@@ -208,6 +266,32 @@ bool HyperHDRClient::sendTCPMessage(const uint8_t* data, size_t size) {
     }
 
     LOG_INFO("FlatBuffer payload sent successfully");
+    return true;
+}
+
+bool HyperHDRClient::sendUDPMessage(const uint8_t* data, size_t size) {
+    if (socket_fd_ < 0) {
+        LOG_ERROR("UDP socket is not open");
+        return false;
+    }
+
+    // UDP RAW mode: send datagram directly with RGB bytes
+    // No length prefix needed - just send the raw RGB data
+    ssize_t sent = ::sendto(socket_fd_, data, size, 0,
+                           reinterpret_cast<struct sockaddr*>(&server_addr_),
+                           sizeof(server_addr_));
+    
+    if (sent < 0) {
+        LOG_ERROR("Failed to send UDP RAW message");
+        return false;
+    }
+    
+    if (static_cast<size_t>(sent) != size) {
+        LOG_WARN("UDP message partially sent: " + std::to_string(sent) + " of " + std::to_string(size) + " bytes");
+        return false;
+    }
+    
+    LOG_DEBUG("UDP RAW message sent successfully: " + std::to_string(sent) + " bytes");
     return true;
 }
 

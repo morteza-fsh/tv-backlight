@@ -24,6 +24,8 @@ struct HyperHDRConfig {
     int port = 19400;
     int priority = 100;
     bool use_linear_format = false;  // true = 1-pixel tall linear format, false = layout-based 2D format
+    bool use_udp = false;  // true = UDP RAW mode (simple RGB bytes), false = TCP FlatBuffers mode
+    int udp_port = 19446;  // UDP port for RAW mode (default Hyperion UDP port)
 };
 
 struct LEDLayoutConfig {
