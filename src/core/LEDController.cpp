@@ -242,7 +242,7 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
         float h_coverage = config_.color_extraction.horizontal_coverage_percent / 100.0f;
         float v_coverage = config_.color_extraction.vertical_coverage_percent / 100.0f;
         
-        // Top edge
+        // Top edge (left to right)
         for (int i = 0; i < top_slices; i++) {
             double u0 = static_cast<double>(i) / top_slices;
             double u1 = static_cast<double>(i + 1) / top_slices;
@@ -252,7 +252,17 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
             );
         }
         
-        // Bottom edge
+        // Right edge (top to bottom)
+        for (int i = 0; i < right_slices; i++) {
+            double v0 = static_cast<double>(i) / right_slices;
+            double v1 = static_cast<double>(i + 1) / right_slices;
+            cell_polygons_.push_back(
+                coons_patching_->buildCellPolygon(1.0 - v_coverage, 1.0, v0, v1, 
+                                                 config_.bezier.polygon_samples)
+            );
+        }
+        
+        // Bottom edge (right to left)
         for (int i = 0; i < bottom_slices; i++) {
             double u0 = static_cast<double>(i) / bottom_slices;
             double u1 = static_cast<double>(i + 1) / bottom_slices;
@@ -262,22 +272,12 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
             );
         }
         
-        // Left edge
+        // Left edge (bottom to top)
         for (int i = 0; i < left_slices; i++) {
             double v0 = static_cast<double>(i) / left_slices;
             double v1 = static_cast<double>(i + 1) / left_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(0.0, v_coverage, v0, v1, 
-                                                 config_.bezier.polygon_samples)
-            );
-        }
-        
-        // Right edge
-        for (int i = 0; i < right_slices; i++) {
-            double v0 = static_cast<double>(i) / right_slices;
-            double v1 = static_cast<double>(i + 1) / right_slices;
-            cell_polygons_.push_back(
-                coons_patching_->buildCellPolygon(1.0 - v_coverage, 1.0, v0, v1, 
                                                  config_.bezier.polygon_samples)
             );
         }

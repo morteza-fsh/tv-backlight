@@ -136,6 +136,18 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }
     
+    // Generate RIGHT edge polygons (vertical slices)
+    // These span vertically and cover right v_coverage of width
+    // Full height coverage (includes corner overlap with top/bottom)
+    for (int i = 0; i < vertical_slices; i++) {
+        double u0 = 1.0 - v_coverage;
+        double u1 = 1.0;
+        double v0 = static_cast<double>(i) / vertical_slices;
+        double v1 = static_cast<double>(i + 1) / vertical_slices;
+        
+        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
+    }
+    
     // Generate BOTTOM edge polygons (horizontal slices)
     // These span horizontally but only cover bottom h_coverage of height
     for (int i = 0; i < horizontal_slices; i++) {
@@ -153,18 +165,6 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
     for (int i = 0; i < vertical_slices; i++) {
         double u0 = 0.0;
         double u1 = v_coverage;
-        double v0 = static_cast<double>(i) / vertical_slices;
-        double v1 = static_cast<double>(i + 1) / vertical_slices;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
-    }
-    
-    // Generate RIGHT edge polygons (vertical slices)
-    // These span vertically and cover right v_coverage of width
-    // Full height coverage (includes corner overlap with top/bottom)
-    for (int i = 0; i < vertical_slices; i++) {
-        double u0 = 1.0 - v_coverage;
-        double u1 = 1.0;
         double v0 = static_cast<double>(i) / vertical_slices;
         double v1 = static_cast<double>(i + 1) / vertical_slices;
         

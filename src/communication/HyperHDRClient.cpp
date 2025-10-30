@@ -314,7 +314,7 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         }
     } else {
         // For HyperHDR layout, map LEDs to edge positions as 10x10 adjacent squares
-        // Direction: top-left → top-right → bottom-right → bottom-left
+        // Order: top (L→R) → right (T→B) → bottom (R→L) → left (B→T)
         int top_count = layout.getTopCount();
         int bottom_count = layout.getBottomCount();
         int left_count = layout.getLeftCount();
