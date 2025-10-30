@@ -377,10 +377,7 @@ bool LEDController::setupHyperHDRClient() {
     hyperhdr_client_ = std::make_unique<HyperHDRClient>(
         config_.hyperhdr.host,
         config_.hyperhdr.port,
-        config_.hyperhdr.priority,
-        "cpp-tv-led",
-        config_.hyperhdr.use_udp,
-        config_.hyperhdr.udp_port
+        config_.hyperhdr.priority
     );
     
     if (!hyperhdr_client_->connect()) {

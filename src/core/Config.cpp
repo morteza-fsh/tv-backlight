@@ -51,8 +51,6 @@ bool Config::loadFromFile(const std::string& filename) {
             hyperhdr.port = hdr.value("port", 19400);
             hyperhdr.priority = hdr.value("priority", 100);
             hyperhdr.use_linear_format = hdr.value("use_linear_format", false);
-            hyperhdr.use_udp = hdr.value("use_udp", false);
-            hyperhdr.udp_port = hdr.value("udp_port", 19446);
         }
         
         // Parse LED layout
@@ -174,8 +172,6 @@ bool Config::saveToFile(const std::string& filename) const {
         j["hyperhdr"]["port"] = hyperhdr.port;
         j["hyperhdr"]["priority"] = hyperhdr.priority;
         j["hyperhdr"]["use_linear_format"] = hyperhdr.use_linear_format;
-        j["hyperhdr"]["use_udp"] = hyperhdr.use_udp;
-        j["hyperhdr"]["udp_port"] = hyperhdr.udp_port;
         
         j["led_layout"]["format"] = led_layout.format;
         j["led_layout"]["grid"]["rows"] = led_layout.grid_rows;
