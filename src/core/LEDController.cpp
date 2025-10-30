@@ -427,8 +427,18 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
     
     // Send to HyperHDR
     if (hyperhdr_client_ && hyperhdr_client_->isConnected()) {
-        if (hyperhdr_client_->sendColors(colors, *led_layout_)) {
-            LOG_INFO("Sent " + std::to_string(colors.size()) + " colors to HyperHDR");
+        bool success = false;
+        if (config_.hyperhdr.use_linear_format) {
+            // Use linear format: 1 pixel tall, width = LED count
+            success = hyperhdr_client_->sendColorsLinear(colors);
+        } else {
+            // Use layout-based 2D format
+            success = hyperhdr_client_->sendColors(colors, *led_layout_);
+        }
+        
+        if (success) {
+            LOG_INFO("Sent " + std::to_string(colors.size()) + " colors to HyperHDR (" +
+                     (config_.hyperhdr.use_linear_format ? "linear format" : "layout format") + ")");
         } else {
             LOG_WARN("Failed to send colors to HyperHDR");
         }
@@ -438,6 +448,7 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
     if (saveDebugImages) {
         saveDebugBoundaries(frame);
         saveColorGrid(colors);
+        saveRectangleImage(frame);
     }
     
     total_timer.stop();
@@ -672,6 +683,94 @@ void LEDController::saveColorGrid(const std::vector<cv::Vec3b>& colors) {
     std::string path = config_.output_directory + "/dominant_color_grid.png";
     cv::imwrite(path, color_grid);
     LOG_INFO("Saved color grid to " + path);
+}
+
+void LEDController::saveRectangleImage(const cv::Mat& frame) {
+    if (!coons_patching_) {
+        LOG_WARN("Coons patching not initialized, skipping rectangle image");
+        return;
+    }
+    
+    // Get all bezier points forming the closed boundary
+    std::vector<cv::Point2f> top_pts = top_bezier_.getPoints();
+    std::vector<cv::Point2f> right_pts = right_bezier_.getPoints();
+    std::vector<cv::Point2f> bottom_pts = bottom_bezier_.getPoints();
+    std::vector<cv::Point2f> left_pts = left_bezier_.getPoints();
+    
+    if (top_pts.empty() || right_pts.empty() || bottom_pts.empty() || left_pts.empty()) {
+        LOG_WARN("Bezier curves not properly initialized, skipping rectangle image");
+        return;
+    }
+    
+    // Extract four corner points from the bezier curves
+    // Top-left: start of top bezier (which connects to left bezier)
+    cv::Point2f top_left = top_pts.front();
+    // Top-right: end of top bezier (which connects to right bezier)
+    cv::Point2f top_right = top_pts.back();
+    // Bottom-right: end of right bezier (which connects to bottom bezier)
+    cv::Point2f bottom_right = right_pts.back();
+    // Bottom-left: start of left bezier (which connects to bottom bezier)
+    cv::Point2f bottom_left = left_pts.front();
+    
+    // Define source points (the four corners of the bezier boundary)
+    std::vector<cv::Point2f> src_points = {top_left, top_right, bottom_right, bottom_left};
+    
+    // Calculate output dimensions based on bounding rectangle
+    std::vector<cv::Point2f> all_corners = {top_left, top_right, bottom_right, bottom_left};
+    cv::Rect2f bounding_rect = cv::boundingRect(all_corners);
+    
+    // Use bounding rectangle dimensions for output, but ensure minimum size
+    int output_width = std::max(static_cast<int>(bounding_rect.width), 100);
+    int output_height = std::max(static_cast<int>(bounding_rect.height), 100);
+    
+    // Define destination points (perfect rectangle filling the entire output)
+    std::vector<cv::Point2f> dst_points = {
+        cv::Point2f(0, 0),                              // Top-left
+        cv::Point2f(output_width - 1, 0),              // Top-right
+        cv::Point2f(output_width - 1, output_height - 1), // Bottom-right
+        cv::Point2f(0, output_height - 1)               // Bottom-left
+    };
+    
+    // Calculate perspective transformation matrix
+    cv::Mat transform_matrix = cv::getPerspectiveTransform(src_points, dst_points);
+    
+    // Create output image (black background)
+    cv::Mat rect_image = cv::Mat::zeros(output_height, output_width, CV_8UC3);
+    
+    // Apply perspective transformation to warp the frame content
+    cv::warpPerspective(frame, rect_image, transform_matrix, 
+                       cv::Size(output_width, output_height),
+                       cv::INTER_LINEAR, 
+                       cv::BORDER_CONSTANT, 
+                       cv::Scalar(0, 0, 0));
+    
+    // Draw corner markers on the transformed image
+    std::vector<cv::Point2f> transformed_corners;
+    cv::perspectiveTransform(src_points, transformed_corners, transform_matrix);
+    
+    std::vector<cv::Point> corner_int;
+    for (const auto& pt : transformed_corners) {
+        corner_int.push_back(cv::Point(static_cast<int>(pt.x), static_cast<int>(pt.y)));
+    }
+    
+    if (corner_int.size() >= 4) {
+        int corner_radius = 8;
+        cv::circle(rect_image, corner_int[0], corner_radius, cv::Scalar(255, 0, 0), -1); // Top-left (blue)
+        cv::circle(rect_image, corner_int[1], corner_radius, cv::Scalar(0, 0, 255), -1); // Top-right (red)
+        cv::circle(rect_image, corner_int[2], corner_radius, cv::Scalar(255, 255, 0), -1); // Bottom-right (yellow)
+        cv::circle(rect_image, corner_int[3], corner_radius, cv::Scalar(0, 255, 255), -1); // Bottom-left (cyan)
+    }
+    
+    // Add border around the rectangle
+    cv::rectangle(rect_image, cv::Point(0, 0), 
+                 cv::Point(output_width - 1, output_height - 1), 
+                 cv::Scalar(255, 255, 255), 2);
+    
+    // Save the rectangle image
+    std::string path = config_.output_directory + "/bezier_rectangle.png";
+    cv::imwrite(path, rect_image);
+    LOG_INFO("Saved bezier rectangle image to " + path + 
+             " (" + std::to_string(output_width) + "x" + std::to_string(output_height) + ")");
 }
 
 } // namespace TVLED

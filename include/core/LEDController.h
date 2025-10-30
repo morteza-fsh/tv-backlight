@@ -45,6 +45,7 @@ private:
     // Debug output
     void saveDebugBoundaries(const cv::Mat& frame);
     void saveColorGrid(const std::vector<cv::Vec3b>& colors);
+    void saveRectangleImage(const cv::Mat& frame);
     
     Config config_;
     std::unique_ptr<FrameSource> frame_source_;

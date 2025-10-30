@@ -23,6 +23,7 @@ struct HyperHDRConfig {
     std::string host = "127.0.0.1";
     int port = 19400;
     int priority = 100;
+    bool use_linear_format = false;  // true = 1-pixel tall linear format, false = layout-based 2D format
 };
 
 struct LEDLayoutConfig {

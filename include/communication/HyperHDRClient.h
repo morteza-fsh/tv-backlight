@@ -28,6 +28,12 @@ public:
     // LED layout is used to create proper 2D image structure.
     bool sendColors(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout);
     
+    // Send LED colors to HyperHDR using linear format (1 pixel tall, width = LED count)
+    // Each pixel in the single row represents one LED's color directly.
+    // Colors must be in RGB (R,G,B) 8-bit per channel.
+    // This is the standard way to send per-LED color frames using FlatBuffers.
+    bool sendColorsLinear(const std::vector<cv::Vec3b>& colors);
+    
     // Check if connected
     bool isConnected() const { return connected_; }
     
@@ -47,6 +53,7 @@ private:
     bool sendTCPMessage(const uint8_t* data, size_t size);
     bool registerWithHyperHDR();
     std::vector<uint8_t> createFlatBufferMessage(const std::vector<cv::Vec3b>& colors, const LEDLayout& layout);
+    std::vector<uint8_t> createFlatBufferMessageLinear(const std::vector<cv::Vec3b>& colors);
 
     static bool sendAll(int fd, const uint8_t* data, size_t size);
 };

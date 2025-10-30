@@ -50,6 +50,7 @@ bool Config::loadFromFile(const std::string& filename) {
             hyperhdr.host = hdr.value("host", "127.0.0.1");
             hyperhdr.port = hdr.value("port", 19400);
             hyperhdr.priority = hdr.value("priority", 100);
+            hyperhdr.use_linear_format = hdr.value("use_linear_format", false);
         }
         
         // Parse LED layout
@@ -170,6 +171,7 @@ bool Config::saveToFile(const std::string& filename) const {
         j["hyperhdr"]["host"] = hyperhdr.host;
         j["hyperhdr"]["port"] = hyperhdr.port;
         j["hyperhdr"]["priority"] = hyperhdr.priority;
+        j["hyperhdr"]["use_linear_format"] = hyperhdr.use_linear_format;
         
         j["led_layout"]["format"] = led_layout.format;
         j["led_layout"]["grid"]["rows"] = led_layout.grid_rows;
