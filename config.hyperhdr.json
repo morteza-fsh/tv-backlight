@@ -18,7 +18,8 @@
     "enabled": true,
     "host": "127.0.0.1",
     "port": 19400,
-    "priority": 100
+    "priority": 100,
+    "use_linear_format": true
   },
   
   "led_layout": {
