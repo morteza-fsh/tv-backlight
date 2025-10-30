@@ -315,6 +315,7 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
     } else {
         // For HyperHDR layout, map LEDs to edge positions as 10x10 adjacent squares
         // Order: top (L→R) → right (T→B) → bottom (R→L) → left (B→T)
+        // Note: bottom and left arrays are reversed when mapping to physical positions
         int top_count = layout.getTopCount();
         int bottom_count = layout.getBottomCount();
         int left_count = layout.getLeftCount();
@@ -366,11 +367,11 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             led_idx++;
         }
         
-        // Bottom edge (right to left) - 10x10 squares along the bottom
-        for (int i = 0; i < bottom_count && led_idx < led_count; i++) {
+        // Bottom edge (right to left) - iterate backwards to reverse the array
+        for (int i = bottom_count - 1; i >= 0 && led_idx < led_count; i--) {
             const auto& color = colors[led_idx];
-            int x_start = image_width - 10 - (i * 10);  // Right to left
-            int y_start = image_height - 10;             // Bottom edge
+            int x_start = i * 10;  // Each LED gets a 10-pixel wide square
+            int y_start = image_height - 10;  // Bottom edge
             
             // Fill 10x10 square
             for (int dy = 0; dy < 10; dy++) {
@@ -388,11 +389,11 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             led_idx++;
         }
         
-        // Left edge (bottom to top) - 10x10 squares along the left
-        for (int i = 0; i < left_count && led_idx < led_count; i++) {
+        // Left edge (bottom to top) - iterate backwards to reverse the array
+        for (int i = left_count - 1; i >= 0 && led_idx < led_count; i--) {
             const auto& color = colors[led_idx];
             int x_start = 0;                              // Left edge
-            int y_start = image_height - 10 - (i * 10);  // Bottom to top
+            int y_start = i * 10;                         // Each LED gets a 10-pixel tall square
             
             // Fill 10x10 square
             for (int dy = 0; dy < 10; dy++) {

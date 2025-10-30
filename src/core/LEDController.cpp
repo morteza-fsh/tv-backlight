@@ -262,8 +262,8 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
             );
         }
         
-        // Bottom edge (right to left)
-        for (int i = 0; i < bottom_slices; i++) {
+        // Bottom edge (right to left) - reversed order
+        for (int i = bottom_slices - 1; i >= 0; i--) {
             double u0 = static_cast<double>(i) / bottom_slices;
             double u1 = static_cast<double>(i + 1) / bottom_slices;
             cell_polygons_.push_back(
@@ -272,8 +272,8 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
             );
         }
         
-        // Left edge (bottom to top)
-        for (int i = 0; i < left_slices; i++) {
+        // Left edge (bottom to top) - reversed order
+        for (int i = left_slices - 1; i >= 0; i--) {
             double v0 = static_cast<double>(i) / left_slices;
             double v1 = static_cast<double>(i + 1) / left_slices;
             cell_polygons_.push_back(

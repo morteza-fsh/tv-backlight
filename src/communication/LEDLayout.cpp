@@ -60,6 +60,7 @@ void LEDLayout::computeLEDOrder() {
         }
     } else {
         // HyperHDR clockwise order: top (L->R), right (T->B), bottom (R->L), left (B->T)
+        // Note: bottom and left arrays are reversed in the color extraction
         int idx = 0;
         
         // Top edge (left to right)
@@ -72,12 +73,12 @@ void LEDLayout::computeLEDOrder() {
             led_order_.push_back(idx++);
         }
         
-        // Bottom edge (right to left)
+        // Bottom edge (right to left) - reversed
         for (int i = 0; i < bottom_count_; i++) {
             led_order_.push_back(idx++);
         }
         
-        // Left edge (bottom to top)
+        // Left edge (bottom to top) - reversed
         for (int i = 0; i < left_count_; i++) {
             led_order_.push_back(idx++);
         }

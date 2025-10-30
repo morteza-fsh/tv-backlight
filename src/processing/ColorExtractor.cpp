@@ -148,9 +148,9 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }
     
-    // Generate BOTTOM edge polygons (horizontal slices)
+    // Generate BOTTOM edge polygons (horizontal slices) - reversed order
     // These span horizontally but only cover bottom h_coverage of height
-    for (int i = 0; i < horizontal_slices; i++) {
+    for (int i = horizontal_slices - 1; i >= 0; i--) {
         double u0 = static_cast<double>(i) / horizontal_slices;
         double u1 = static_cast<double>(i + 1) / horizontal_slices;
         double v0 = 1.0 - h_coverage;
@@ -159,10 +159,10 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }
     
-    // Generate LEFT edge polygons (vertical slices)
+    // Generate LEFT edge polygons (vertical slices) - reversed order
     // These span vertically (v direction) and cover left v_coverage of width
     // Full height coverage (includes corner overlap with top/bottom)
-    for (int i = 0; i < vertical_slices; i++) {
+    for (int i = vertical_slices - 1; i >= 0; i--) {
         double u0 = 0.0;
         double u1 = v_coverage;
         double v0 = static_cast<double>(i) / vertical_slices;

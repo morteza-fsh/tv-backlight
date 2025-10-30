@@ -25,6 +25,7 @@ public:
     
     // Get LED ordering (clockwise from top-left)
     // Returns indices in order: top (L->R), right (T->B), bottom (R->L), left (B->T)
+    // Note: bottom and left arrays are reversed when extracting colors
     std::vector<int> getLEDOrder() const;
     
     // Convert grid coordinates to LED index
