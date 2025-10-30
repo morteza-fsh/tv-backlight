@@ -211,22 +211,41 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
     
     if (config_.color_extraction.mode == "edge_slices") {
         // Pre-compute edge slice polygons
-        int h_slices = config_.color_extraction.horizontal_slices;
-        int v_slices = config_.color_extraction.vertical_slices;
-        int total = 2 * h_slices + 2 * v_slices;
+        // Use LED layout counts if explicitly set, otherwise use color_extraction defaults
+        int top_slices, bottom_slices, left_slices, right_slices;
+        
+        if (config_.led_layout.format == "hyperhdr") {
+            // Use explicit LED layout counts
+            top_slices = config_.led_layout.hyperhdr_top;
+            bottom_slices = config_.led_layout.hyperhdr_bottom;
+            left_slices = config_.led_layout.hyperhdr_left;
+            right_slices = config_.led_layout.hyperhdr_right;
+        } else {
+            // Use color_extraction defaults
+            top_slices = config_.color_extraction.horizontal_slices;
+            bottom_slices = config_.color_extraction.horizontal_slices;
+            left_slices = config_.color_extraction.vertical_slices;
+            right_slices = config_.color_extraction.vertical_slices;
+        }
+        
+        int total = top_slices + bottom_slices + left_slices + right_slices;
         
         cell_polygons_.reserve(total);
         
         LOG_INFO("Pre-computing " + std::to_string(total) + " edge slice polygons...");
+        LOG_INFO("Edge slice counts: T=" + std::to_string(top_slices) + 
+                 " B=" + std::to_string(bottom_slices) + 
+                 " L=" + std::to_string(left_slices) + 
+                 " R=" + std::to_string(right_slices));
         PerformanceTimer timer("Edge slice polygon generation", false);
         
         float h_coverage = config_.color_extraction.horizontal_coverage_percent / 100.0f;
         float v_coverage = config_.color_extraction.vertical_coverage_percent / 100.0f;
         
         // Top edge
-        for (int i = 0; i < h_slices; i++) {
-            double u0 = static_cast<double>(i) / h_slices;
-            double u1 = static_cast<double>(i + 1) / h_slices;
+        for (int i = 0; i < top_slices; i++) {
+            double u0 = static_cast<double>(i) / top_slices;
+            double u1 = static_cast<double>(i + 1) / top_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(u0, u1, 0.0, h_coverage, 
                                                  config_.bezier.polygon_samples)
@@ -234,9 +253,9 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
         }
         
         // Bottom edge
-        for (int i = 0; i < h_slices; i++) {
-            double u0 = static_cast<double>(i) / h_slices;
-            double u1 = static_cast<double>(i + 1) / h_slices;
+        for (int i = 0; i < bottom_slices; i++) {
+            double u0 = static_cast<double>(i) / bottom_slices;
+            double u1 = static_cast<double>(i + 1) / bottom_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(u0, u1, 1.0 - h_coverage, 1.0, 
                                                  config_.bezier.polygon_samples)
@@ -244,9 +263,9 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
         }
         
         // Left edge
-        for (int i = 0; i < v_slices; i++) {
-            double v0 = static_cast<double>(i) / v_slices;
-            double v1 = static_cast<double>(i + 1) / v_slices;
+        for (int i = 0; i < left_slices; i++) {
+            double v0 = static_cast<double>(i) / left_slices;
+            double v1 = static_cast<double>(i + 1) / left_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(0.0, v_coverage, v0, v1, 
                                                  config_.bezier.polygon_samples)
@@ -254,9 +273,9 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
         }
         
         // Right edge
-        for (int i = 0; i < v_slices; i++) {
-            double v0 = static_cast<double>(i) / v_slices;
-            double v1 = static_cast<double>(i + 1) / v_slices;
+        for (int i = 0; i < right_slices; i++) {
+            double v0 = static_cast<double>(i) / right_slices;
+            double v1 = static_cast<double>(i + 1) / right_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(1.0 - v_coverage, 1.0, v0, v1, 
                                                  config_.bezier.polygon_samples)
@@ -555,40 +574,54 @@ void LEDController::saveDebugBoundaries(const cv::Mat& frame) {
         cv::Mat overlay = debug_img.clone();
         
         // Generate and draw all edge slice polygons
-        int h_slices = config_.color_extraction.horizontal_slices;
-        int v_slices = config_.color_extraction.vertical_slices;
+        // Use LED layout counts if explicitly set, otherwise use color_extraction defaults
+        int top_slices, bottom_slices, left_slices, right_slices;
+        
+        if (config_.led_layout.format == "hyperhdr") {
+            // Use explicit LED layout counts
+            top_slices = config_.led_layout.hyperhdr_top;
+            bottom_slices = config_.led_layout.hyperhdr_bottom;
+            left_slices = config_.led_layout.hyperhdr_left;
+            right_slices = config_.led_layout.hyperhdr_right;
+        } else {
+            // Use color_extraction defaults
+            top_slices = config_.color_extraction.horizontal_slices;
+            bottom_slices = config_.color_extraction.horizontal_slices;
+            left_slices = config_.color_extraction.vertical_slices;
+            right_slices = config_.color_extraction.vertical_slices;
+        }
         
         // Top edge
-        for (int i = 0; i < h_slices; i++) {
-            double u0 = static_cast<double>(i) / h_slices;
-            double u1 = static_cast<double>(i + 1) / h_slices;
+        for (int i = 0; i < top_slices; i++) {
+            double u0 = static_cast<double>(i) / top_slices;
+            double u1 = static_cast<double>(i + 1) / top_slices;
             auto poly = coons_patching_->buildCellPolygon(u0, u1, 0.0, h_cov, 
                                                           config_.bezier.polygon_samples);
             cv::polylines(overlay, poly, true, cv::Scalar(255, 100, 100), 2);
         }
         
         // Bottom edge
-        for (int i = 0; i < h_slices; i++) {
-            double u0 = static_cast<double>(i) / h_slices;
-            double u1 = static_cast<double>(i + 1) / h_slices;
+        for (int i = 0; i < bottom_slices; i++) {
+            double u0 = static_cast<double>(i) / bottom_slices;
+            double u1 = static_cast<double>(i + 1) / bottom_slices;
             auto poly = coons_patching_->buildCellPolygon(u0, u1, 1.0 - h_cov, 1.0, 
                                                           config_.bezier.polygon_samples);
             cv::polylines(overlay, poly, true, cv::Scalar(100, 100, 255), 2);
         }
         
         // Left edge
-        for (int i = 0; i < v_slices; i++) {
-            double v0 = static_cast<double>(i) / v_slices;
-            double v1 = static_cast<double>(i + 1) / v_slices;
+        for (int i = 0; i < left_slices; i++) {
+            double v0 = static_cast<double>(i) / left_slices;
+            double v1 = static_cast<double>(i + 1) / left_slices;
             auto poly = coons_patching_->buildCellPolygon(0.0, v_cov, v0, v1, 
                                                           config_.bezier.polygon_samples);
             cv::polylines(overlay, poly, true, cv::Scalar(100, 255, 100), 2);
         }
         
         // Right edge
-        for (int i = 0; i < v_slices; i++) {
-            double v0 = static_cast<double>(i) / v_slices;
-            double v1 = static_cast<double>(i + 1) / v_slices;
+        for (int i = 0; i < right_slices; i++) {
+            double v0 = static_cast<double>(i) / right_slices;
+            double v1 = static_cast<double>(i + 1) / right_slices;
             auto poly = coons_patching_->buildCellPolygon(1.0 - v_cov, 1.0, v0, v1, 
                                                           config_.bezier.polygon_samples);
             cv::polylines(overlay, poly, true, cv::Scalar(255, 255, 100), 2);
