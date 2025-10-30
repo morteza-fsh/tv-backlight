@@ -311,8 +311,22 @@ bool LEDController::setupColorExtractor() {
 bool LEDController::setupLEDLayout() {
     LOG_INFO("Setting up LED layout...");
     
-    // If using edge_slices mode, adapt LED layout accordingly
-    if (config_.color_extraction.mode == "edge_slices") {
+    // Check explicit LED layout format first
+    if (config_.led_layout.format == "grid") {
+        led_layout_ = std::make_unique<LEDLayout>(
+            LEDLayout::fromGrid(config_.led_layout.grid_rows, config_.led_layout.grid_cols)
+        );
+    } else if (config_.led_layout.format == "hyperhdr") {
+        led_layout_ = std::make_unique<LEDLayout>(
+            LEDLayout::fromHyperHDR(
+                config_.led_layout.hyperhdr_top,
+                config_.led_layout.hyperhdr_bottom,
+                config_.led_layout.hyperhdr_left,
+                config_.led_layout.hyperhdr_right
+            )
+        );
+    } else if (config_.color_extraction.mode == "edge_slices") {
+        // If using edge_slices mode without explicit layout, use edge_slices defaults
         // For edge slices: top + bottom + left + right
         int total_leds = 2 * config_.color_extraction.horizontal_slices + 
                         2 * config_.color_extraction.vertical_slices;
@@ -330,19 +344,6 @@ bool LEDController::setupLEDLayout() {
         
         LOG_INFO("LED layout configured for edge_slices mode: " + 
                  std::to_string(total_leds) + " LEDs");
-    } else if (config_.led_layout.format == "grid") {
-        led_layout_ = std::make_unique<LEDLayout>(
-            LEDLayout::fromGrid(config_.led_layout.grid_rows, config_.led_layout.grid_cols)
-        );
-    } else if (config_.led_layout.format == "hyperhdr") {
-        led_layout_ = std::make_unique<LEDLayout>(
-            LEDLayout::fromHyperHDR(
-                config_.led_layout.hyperhdr_top,
-                config_.led_layout.hyperhdr_bottom,
-                config_.led_layout.hyperhdr_left,
-                config_.led_layout.hyperhdr_right
-            )
-        );
     } else {
         LOG_ERROR("Unknown LED layout format: " + config_.led_layout.format);
         return false;
