@@ -37,6 +37,15 @@ bool Config::loadFromFile(const std::string& filename) {
             camera.fps = cam.value("fps", 41);
             camera.sensor_mode = cam.value("sensor_mode", -1);
             
+            // Parse autofocus settings
+            camera.autofocus_mode = cam.value("autofocus_mode", "default");
+            camera.lens_position = cam.value("lens_position", 0.0f);
+            
+            // Parse white balance settings
+            camera.awb_mode = cam.value("awb_mode", "auto");
+            camera.awb_gain_red = cam.value("awb_gain_red", 0.0f);
+            camera.awb_gain_blue = cam.value("awb_gain_blue", 0.0f);
+            
             // Parse scaling settings
             camera.enable_scaling = cam.value("enable_scaling", true);
             camera.scaled_width = cam.value("scaled_width", 820);
@@ -163,6 +172,11 @@ bool Config::saveToFile(const std::string& filename) const {
         j["camera"]["height"] = camera.height;
         j["camera"]["fps"] = camera.fps;
         j["camera"]["sensor_mode"] = camera.sensor_mode;
+        j["camera"]["autofocus_mode"] = camera.autofocus_mode;
+        j["camera"]["lens_position"] = camera.lens_position;
+        j["camera"]["awb_mode"] = camera.awb_mode;
+        j["camera"]["awb_gain_red"] = camera.awb_gain_red;
+        j["camera"]["awb_gain_blue"] = camera.awb_gain_blue;
         j["camera"]["enable_scaling"] = camera.enable_scaling;
         j["camera"]["scaled_width"] = camera.scaled_width;
         j["camera"]["scaled_height"] = camera.scaled_height;

@@ -12,6 +12,15 @@ struct CameraConfig {
     int fps = 41;       // Max FPS at binned resolution
     int sensor_mode = -1;  // -1 = auto, or specify mode number (use rpicam-hello --list-cameras to see modes)
     
+    // Autofocus configuration
+    std::string autofocus_mode = "default";  // "default", "manual", "auto", "continuous"
+    float lens_position = 0.0f;  // Lens position for manual focus (0.0 = infinity, larger values = closer)
+    
+    // White balance configuration
+    std::string awb_mode = "auto";  // "auto", "incandescent", "tungsten", "fluorescent", "indoor", "daylight", "cloudy", "custom"
+    float awb_gain_red = 0.0f;   // Red gain for custom white balance (0.0 = use auto)
+    float awb_gain_blue = 0.0f;  // Blue gain for custom white balance (0.0 = use auto)
+    
     // Scaling configuration
     bool enable_scaling = true;
     int scaled_width = 820;   // Scale down 2x for performance

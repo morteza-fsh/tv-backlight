@@ -16,6 +16,8 @@ namespace TVLED {
 class CameraFrameSource : public FrameSource {
 public:
     CameraFrameSource(const std::string& device, int width, int height, int fps, int sensor_mode = -1,
+                     const std::string& autofocus_mode = "default", float lens_position = 0.0f,
+                     const std::string& awb_mode = "auto", float awb_gain_red = 0.0f, float awb_gain_blue = 0.0f,
                      bool enable_scaling = true, int scaled_width = 960, int scaled_height = 540);
     ~CameraFrameSource() override;
     
@@ -31,6 +33,11 @@ private:
     int height_;
     int fps_;
     int sensor_mode_;
+    std::string autofocus_mode_;
+    float lens_position_;
+    std::string awb_mode_;
+    float awb_gain_red_;
+    float awb_gain_blue_;
     bool initialized_;
     
     // Scaling configuration

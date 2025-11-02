@@ -72,6 +72,11 @@ bool LEDController::setupFrameSource() {
             config_.camera.height,
             config_.camera.fps,
             config_.camera.sensor_mode,
+            config_.camera.autofocus_mode,
+            config_.camera.lens_position,
+            config_.camera.awb_mode,
+            config_.camera.awb_gain_red,
+            config_.camera.awb_gain_blue,
             config_.camera.enable_scaling,
             config_.camera.scaled_width,
             config_.camera.scaled_height

@@ -9,6 +9,9 @@
     "height": 1232,
     "fps": 41,
     "sensor_mode": -1,
+    "autofocus_mode": "manual",
+    "lens_position": 5.0,
+    "awb_mode": "daylight",
     "enable_scaling": true,
     "scaled_width": 820,
     "scaled_height": 616

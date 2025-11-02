@@ -9,8 +9,12 @@
 namespace TVLED {
 
 CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps, int sensor_mode,
+                                     const std::string& autofocus_mode, float lens_position,
+                                     const std::string& awb_mode, float awb_gain_red, float awb_gain_blue,
                                      bool enable_scaling, int scaled_width, int scaled_height)
     : device_(device), width_(width), height_(height), fps_(fps), sensor_mode_(sensor_mode),
+      autofocus_mode_(autofocus_mode), lens_position_(lens_position),
+      awb_mode_(awb_mode), awb_gain_red_(awb_gain_red), awb_gain_blue_(awb_gain_blue),
       initialized_(false), camera_pipe_(nullptr),
       enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height) {
 }
@@ -52,6 +56,24 @@ bool CameraFrameSource::initialize() {
         cmd += " --timeout 0";  // Run indefinitely
         cmd += " --nopreview";  // No preview window
         cmd += " --codec mjpeg";  // MJPEG stream
+        
+        // Add autofocus settings
+        if (!autofocus_mode_.empty() && autofocus_mode_ != "default") {
+            cmd += " --autofocus-mode " + autofocus_mode_;
+            if (autofocus_mode_ == "manual" && lens_position_ > 0.0f) {
+                cmd += " --lens-position " + std::to_string(lens_position_);
+            }
+        }
+        
+        // Add white balance settings
+        if (!awb_mode_.empty() && awb_mode_ != "auto") {
+            cmd += " --awb " + awb_mode_;
+            // If custom mode and gains are specified, add them
+            if (awb_mode_ == "custom" && awb_gain_red_ > 0.0f && awb_gain_blue_ > 0.0f) {
+                cmd += " --awbgains " + std::to_string(awb_gain_red_) + "," + std::to_string(awb_gain_blue_);
+            }
+        }
+        
         cmd += " --output -";  // Output to stdout
         cmd += " 2>/dev/null";  // Suppress stderr
         
