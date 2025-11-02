@@ -242,6 +242,16 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
         float h_coverage = config_.color_extraction.horizontal_coverage_percent / 100.0f;
         float v_coverage = config_.color_extraction.vertical_coverage_percent / 100.0f;
         
+        // Left edge (bottom to top) - reversed order
+        for (int i = left_slices - 1; i >= 0; i--) {
+            double v0 = static_cast<double>(i) / left_slices;
+            double v1 = static_cast<double>(i + 1) / left_slices;
+            cell_polygons_.push_back(
+                coons_patching_->buildCellPolygon(0.0, v_coverage, v0, v1, 
+                                                 config_.bezier.polygon_samples)
+            );
+        }
+        
         // Top edge (left to right)
         for (int i = 0; i < top_slices; i++) {
             double u0 = static_cast<double>(i) / top_slices;
@@ -268,16 +278,6 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
             double u1 = static_cast<double>(i + 1) / bottom_slices;
             cell_polygons_.push_back(
                 coons_patching_->buildCellPolygon(u0, u1, 1.0 - h_coverage, 1.0, 
-                                                 config_.bezier.polygon_samples)
-            );
-        }
-        
-        // Left edge (bottom to top) - reversed order
-        for (int i = left_slices - 1; i >= 0; i--) {
-            double v0 = static_cast<double>(i) / left_slices;
-            double v1 = static_cast<double>(i + 1) / left_slices;
-            cell_polygons_.push_back(
-                coons_patching_->buildCellPolygon(0.0, v_coverage, v0, v1, 
                                                  config_.bezier.polygon_samples)
             );
         }

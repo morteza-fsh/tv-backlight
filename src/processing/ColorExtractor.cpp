@@ -125,7 +125,19 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
     float h_coverage = horizontal_coverage_percent / 100.0f;
     float v_coverage = vertical_coverage_percent / 100.0f;
     
-    // Generate TOP edge polygons (horizontal slices)
+    // Generate LEFT edge polygons (vertical slices) - reversed order (bottom to top)
+    // These span vertically (v direction) and cover left v_coverage of width
+    // Full height coverage (includes corner overlap with top/bottom)
+    for (int i = vertical_slices - 1; i >= 0; i--) {
+        double u0 = 0.0;
+        double u1 = v_coverage;
+        double v0 = static_cast<double>(i) / vertical_slices;
+        double v1 = static_cast<double>(i + 1) / vertical_slices;
+        
+        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
+    }
+    
+    // Generate TOP edge polygons (horizontal slices) - left to right
     // These span horizontally (u direction) but only cover top h_coverage of height
     for (int i = 0; i < horizontal_slices; i++) {
         double u0 = static_cast<double>(i) / horizontal_slices;
@@ -136,7 +148,7 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }
     
-    // Generate RIGHT edge polygons (vertical slices)
+    // Generate RIGHT edge polygons (vertical slices) - top to bottom
     // These span vertically and cover right v_coverage of width
     // Full height coverage (includes corner overlap with top/bottom)
     for (int i = 0; i < vertical_slices; i++) {
@@ -148,25 +160,13 @@ std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }
     
-    // Generate BOTTOM edge polygons (horizontal slices) - reversed order
+    // Generate BOTTOM edge polygons (horizontal slices) - reversed order (right to left)
     // These span horizontally but only cover bottom h_coverage of height
     for (int i = horizontal_slices - 1; i >= 0; i--) {
         double u0 = static_cast<double>(i) / horizontal_slices;
         double u1 = static_cast<double>(i + 1) / horizontal_slices;
         double v0 = 1.0 - h_coverage;
         double v1 = 1.0;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
-    }
-    
-    // Generate LEFT edge polygons (vertical slices) - reversed order
-    // These span vertically (v direction) and cover left v_coverage of width
-    // Full height coverage (includes corner overlap with top/bottom)
-    for (int i = vertical_slices - 1; i >= 0; i--) {
-        double u0 = 0.0;
-        double u1 = v_coverage;
-        double v0 = static_cast<double>(i) / vertical_slices;
-        double v1 = static_cast<double>(i + 1) / vertical_slices;
         
         polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
     }

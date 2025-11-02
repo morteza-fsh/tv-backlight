@@ -23,9 +23,9 @@ public:
     // Get total number of LEDs
     int getTotalLEDs() const;
     
-    // Get LED ordering (clockwise from top-left)
-    // Returns indices in order: top (L->R), right (T->B), bottom (R->L), left (B->T)
-    // Note: bottom and left arrays are reversed when extracting colors
+    // Get LED ordering (starts from bottom-left, goes clockwise)
+    // Returns indices in order: left (B->T), top (L->R), right (T->B), bottom (R->L)
+    // Note: left and bottom arrays are reversed when extracting colors
     std::vector<int> getLEDOrder() const;
     
     // Convert grid coordinates to LED index

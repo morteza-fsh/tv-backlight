@@ -314,14 +314,36 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
         }
     } else {
         // For HyperHDR layout, map LEDs to edge positions as 10x10 adjacent squares
-        // Order: top (L→R) → right (T→B) → bottom (R→L) → left (B→T)
-        // Note: bottom and left arrays are reversed when mapping to physical positions
+        // Order: left (B→T) → top (L→R) → right (T→B) → bottom (R→L)
+        // Note: left and bottom arrays are reversed when mapping to physical positions
         int top_count = layout.getTopCount();
         int bottom_count = layout.getBottomCount();
         int left_count = layout.getLeftCount();
         int right_count = layout.getRightCount();
         
         int led_idx = 0;
+        
+        // Left edge (bottom to top) - iterate backwards to reverse the array
+        for (int i = left_count - 1; i >= 0 && led_idx < led_count; i--) {
+            const auto& color = colors[led_idx];
+            int x_start = 0;                              // Left edge
+            int y_start = i * 10;                         // Each LED gets a 10-pixel tall square
+            
+            // Fill 10x10 square
+            for (int dy = 0; dy < 10; dy++) {
+                for (int dx = 0; dx < 10; dx++) {
+                    int px = x_start + dx;
+                    int py = y_start + dy;
+                    if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
+                        int pixel_idx = (py * image_width + px) * 3;
+                        rgb_data[pixel_idx + 0] = color[0]; // R
+                        rgb_data[pixel_idx + 1] = color[1]; // G
+                        rgb_data[pixel_idx + 2] = color[2]; // B
+                    }
+                }
+            }
+            led_idx++;
+        }
         
         // Top edge (left to right) - 10x10 squares along the top
         for (int i = 0; i < top_count && led_idx < led_count; i++) {
@@ -372,28 +394,6 @@ std::vector<uint8_t> HyperHDRClient::createFlatBufferMessage(const std::vector<c
             const auto& color = colors[led_idx];
             int x_start = i * 10;  // Each LED gets a 10-pixel wide square
             int y_start = image_height - 10;  // Bottom edge
-            
-            // Fill 10x10 square
-            for (int dy = 0; dy < 10; dy++) {
-                for (int dx = 0; dx < 10; dx++) {
-                    int px = x_start + dx;
-                    int py = y_start + dy;
-                    if (px >= 0 && px < image_width && py >= 0 && py < image_height) {
-                        int pixel_idx = (py * image_width + px) * 3;
-                        rgb_data[pixel_idx + 0] = color[0]; // R
-                        rgb_data[pixel_idx + 1] = color[1]; // G
-                        rgb_data[pixel_idx + 2] = color[2]; // B
-                    }
-                }
-            }
-            led_idx++;
-        }
-        
-        // Left edge (bottom to top) - iterate backwards to reverse the array
-        for (int i = left_count - 1; i >= 0 && led_idx < led_count; i--) {
-            const auto& color = colors[led_idx];
-            int x_start = 0;                              // Left edge
-            int y_start = i * 10;                         // Each LED gets a 10-pixel tall square
             
             // Fill 10x10 square
             for (int dy = 0; dy < 10; dy++) {
