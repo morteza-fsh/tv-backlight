@@ -5,28 +5,26 @@
 
 namespace TVLED {
 
-// Forward declaration
-class CoonsPatching;
-
 class ColorExtractor {
 public:
-    ColorExtractor() : enable_parallel_(true) {}
+    ColorExtractor() : enable_parallel_(true), masks_precomputed_(false) {}
     
     // Extract dominant colors from regions defined by polygons
     // Returns RGB colors (converted from OpenCV's BGR)
     std::vector<cv::Vec3b> extractColors(const cv::Mat& frame,
                                          const std::vector<std::vector<cv::Point>>& polygons);
     
-    // Extract colors from edge slices (for TV backlight mode)
-    // Returns RGB colors for top, bottom, left, right edge regions
-    std::vector<cv::Vec3b> extractEdgeSliceColors(
-        const cv::Mat& frame,
-        const CoonsPatching& coons,
-        int horizontal_slices,
-        int vertical_slices,
-        float horizontal_coverage_percent,
-        float vertical_coverage_percent,
-        int polygon_samples = 15);
+    // Pre-compute masks for polygons (optimization: avoid per-frame mask creation)
+    // Call this once after polygons are created with known frame dimensions
+    void precomputeMasks(const std::vector<std::vector<cv::Point>>& polygons,
+                        int frame_width, int frame_height);
+    
+    // Clear pre-computed masks (call when polygons change)
+    void clearMasks() {
+        cached_masks_.clear();
+        cached_bboxes_.clear();
+        masks_precomputed_ = false;
+    }
     
     void setParallelProcessing(bool enable) { enable_parallel_ = enable; }
     bool isParallelProcessingEnabled() const { return enable_parallel_; }
@@ -37,7 +35,15 @@ private:
                                  const std::vector<cv::Point>& polygon,
                                  const cv::Rect& bbox);
     
+    // Extract color using pre-computed mask (faster)
+    cv::Vec3b extractSingleColorWithMask(const cv::Mat& frame,
+                                        const cv::Mat& mask,
+                                        const cv::Rect& bbox);
+    
     bool enable_parallel_;
+    bool masks_precomputed_;
+    std::vector<cv::Mat> cached_masks_;
+    std::vector<cv::Rect> cached_bboxes_;
 };
 
 } // namespace TVLED

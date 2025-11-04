@@ -1,5 +1,4 @@
 #include "processing/ColorExtractor.h"
-#include "processing/CoonsPatching.h"
 #include "utils/Logger.h"
 #include "utils/PerformanceTimer.h"
 #include <algorithm>
@@ -9,6 +8,48 @@
 #endif
 
 namespace TVLED {
+
+void ColorExtractor::precomputeMasks(const std::vector<std::vector<cv::Point>>& polygons,
+                                     int frame_width, int frame_height) {
+    cached_masks_.clear();
+    cached_bboxes_.clear();
+    cached_masks_.reserve(polygons.size());
+    cached_bboxes_.reserve(polygons.size());
+    
+    LOG_INFO("Pre-computing " + std::to_string(polygons.size()) + " masks...");
+    PerformanceTimer timer("Mask pre-computation", false);
+    
+    for (const auto& polygon : polygons) {
+        cv::Rect bbox = cv::boundingRect(polygon);
+        bbox &= cv::Rect(0, 0, frame_width, frame_height);
+        
+        if (bbox.width <= 0 || bbox.height <= 0) {
+            // Empty mask for invalid bounding box
+            cached_masks_.push_back(cv::Mat());
+            cached_bboxes_.push_back(bbox);
+            continue;
+        }
+        
+        // Create mask for this polygon
+        cv::Mat mask = cv::Mat::zeros(bbox.height, bbox.width, CV_8UC1);
+        std::vector<cv::Point> poly_relative;
+        poly_relative.reserve(polygon.size());
+        
+        for (const auto& pt : polygon) {
+            poly_relative.push_back(cv::Point(pt.x - bbox.x, pt.y - bbox.y));
+        }
+        
+        cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{poly_relative}, cv::Scalar(255));
+        
+        cached_masks_.push_back(mask);
+        cached_bboxes_.push_back(bbox);
+    }
+    
+    timer.stop();
+    masks_precomputed_ = true;
+    LOG_INFO("Mask pre-computation completed in " + 
+             std::to_string(timer.elapsedMilliseconds()) + " ms");
+}
 
 std::vector<cv::Vec3b> ColorExtractor::extractColors(
     const cv::Mat& frame,
@@ -24,30 +65,50 @@ std::vector<cv::Vec3b> ColorExtractor::extractColors(
     
     PerformanceTimer timer("Color extraction", false);
     
-    // Pre-compute bounding boxes
-    std::vector<cv::Rect> bboxes(polygons.size());
-    for (size_t i = 0; i < polygons.size(); i++) {
-        bboxes[i] = cv::boundingRect(polygons[i]);
-        bboxes[i] &= cv::Rect(0, 0, frame.cols, frame.rows);
-    }
-    
-    // Parallel color extraction with OpenMP
-    #ifdef _OPENMP
-    if (enable_parallel_) {
-        #pragma omp parallel for schedule(dynamic, 4)
-        for (int idx = 0; idx < static_cast<int>(polygons.size()); idx++) {
-            colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+    // Use pre-computed masks if available, otherwise fall back to dynamic creation
+    if (masks_precomputed_ && cached_masks_.size() == polygons.size()) {
+        // Fast path: use pre-computed masks
+        #ifdef _OPENMP
+        if (enable_parallel_) {
+            #pragma omp parallel for schedule(dynamic, 4)
+            for (int idx = 0; idx < static_cast<int>(polygons.size()); idx++) {
+                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+            }
+        } else {
+            for (size_t idx = 0; idx < polygons.size(); idx++) {
+                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+            }
         }
+        #else
+        for (size_t idx = 0; idx < polygons.size(); idx++) {
+            colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+        }
+        #endif
     } else {
+        // Fallback: compute masks dynamically (original behavior)
+        std::vector<cv::Rect> bboxes(polygons.size());
+        for (size_t i = 0; i < polygons.size(); i++) {
+            bboxes[i] = cv::boundingRect(polygons[i]);
+            bboxes[i] &= cv::Rect(0, 0, frame.cols, frame.rows);
+        }
+        
+        #ifdef _OPENMP
+        if (enable_parallel_) {
+            #pragma omp parallel for schedule(dynamic, 4)
+            for (int idx = 0; idx < static_cast<int>(polygons.size()); idx++) {
+                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+            }
+        } else {
+            for (size_t idx = 0; idx < polygons.size(); idx++) {
+                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+            }
+        }
+        #else
         for (size_t idx = 0; idx < polygons.size(); idx++) {
             colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
         }
+        #endif
     }
-    #else
-    for (size_t idx = 0; idx < polygons.size(); idx++) {
-        colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
-    }
-    #endif
     
     timer.stop();
     
@@ -59,25 +120,14 @@ std::vector<cv::Vec3b> ColorExtractor::extractColors(
     return colors;
 }
 
-cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
-                                             const std::vector<cv::Point>& polygon,
-                                             const cv::Rect& bbox) {
-    if (bbox.width <= 0 || bbox.height <= 0) {
+cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
+                                                    const cv::Mat& mask,
+                                                    const cv::Rect& bbox) {
+    if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
         return cv::Vec3b(0, 0, 0);
     }
     
-    // Create minimal mask for scanline processing
-    cv::Mat mask = cv::Mat::zeros(bbox.height, bbox.width, CV_8UC1);
-    std::vector<cv::Point> poly_relative;
-    poly_relative.reserve(polygon.size());
-    
-    for (const auto& pt : polygon) {
-        poly_relative.push_back(cv::Point(pt.x - bbox.x, pt.y - bbox.y));
-    }
-    
-    cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{poly_relative}, cv::Scalar(255));
-    
-    // Fast scanline sum using pointer arithmetic
+    // Fast scanline sum using pointer arithmetic (no mask creation needed)
     long long sum_b = 0, sum_g = 0, sum_r = 0;
     int pixel_count = 0;
     
@@ -107,76 +157,26 @@ cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
     return cv::Vec3b(0, 0, 0);
 }
 
-std::vector<cv::Vec3b> ColorExtractor::extractEdgeSliceColors(
-    const cv::Mat& frame,
-    const CoonsPatching& coons,
-    int horizontal_slices,
-    int vertical_slices,
-    float horizontal_coverage_percent,
-    float vertical_coverage_percent,
-    int polygon_samples) {
-    
-    PerformanceTimer timer("Edge slice color extraction", false);
-    
-    std::vector<std::vector<cv::Point>> polygons;
-    polygons.reserve(2 * horizontal_slices + 2 * vertical_slices);
-    
-    // Calculate coverage in [0, 1] range
-    float h_coverage = horizontal_coverage_percent / 100.0f;
-    float v_coverage = vertical_coverage_percent / 100.0f;
-    
-    // Generate LEFT edge polygons (vertical slices) - reversed order (bottom to top)
-    // These span vertically (v direction) and cover left v_coverage of width
-    // Full height coverage (includes corner overlap with top/bottom)
-    for (int i = vertical_slices - 1; i >= 0; i--) {
-        double u0 = 0.0;
-        double u1 = v_coverage;
-        double v0 = static_cast<double>(i) / vertical_slices;
-        double v1 = static_cast<double>(i + 1) / vertical_slices;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
+cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
+                                             const std::vector<cv::Point>& polygon,
+                                             const cv::Rect& bbox) {
+    if (bbox.width <= 0 || bbox.height <= 0) {
+        return cv::Vec3b(0, 0, 0);
     }
     
-    // Generate TOP edge polygons (horizontal slices) - left to right
-    // These span horizontally (u direction) but only cover top h_coverage of height
-    for (int i = 0; i < horizontal_slices; i++) {
-        double u0 = static_cast<double>(i) / horizontal_slices;
-        double u1 = static_cast<double>(i + 1) / horizontal_slices;
-        double v0 = 0.0;
-        double v1 = h_coverage;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
+    // Create minimal mask for scanline processing
+    cv::Mat mask = cv::Mat::zeros(bbox.height, bbox.width, CV_8UC1);
+    std::vector<cv::Point> poly_relative;
+    poly_relative.reserve(polygon.size());
+    
+    for (const auto& pt : polygon) {
+        poly_relative.push_back(cv::Point(pt.x - bbox.x, pt.y - bbox.y));
     }
     
-    // Generate RIGHT edge polygons (vertical slices) - top to bottom
-    // These span vertically and cover right v_coverage of width
-    // Full height coverage (includes corner overlap with top/bottom)
-    for (int i = 0; i < vertical_slices; i++) {
-        double u0 = 1.0 - v_coverage;
-        double u1 = 1.0;
-        double v0 = static_cast<double>(i) / vertical_slices;
-        double v1 = static_cast<double>(i + 1) / vertical_slices;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
-    }
+    cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{poly_relative}, cv::Scalar(255));
     
-    // Generate BOTTOM edge polygons (horizontal slices) - reversed order (right to left)
-    // These span horizontally but only cover bottom h_coverage of height
-    for (int i = horizontal_slices - 1; i >= 0; i--) {
-        double u0 = static_cast<double>(i) / horizontal_slices;
-        double u1 = static_cast<double>(i + 1) / horizontal_slices;
-        double v0 = 1.0 - h_coverage;
-        double v1 = 1.0;
-        
-        polygons.push_back(coons.buildCellPolygon(u0, u1, v0, v1, polygon_samples));
-    }
-    
-    timer.stop();
-    LOG_DEBUG("Generated " + std::to_string(polygons.size()) + " edge slice polygons in " +
-              std::to_string(timer.elapsedMilliseconds()) + " ms");
-    
-    // Extract colors from the generated polygons
-    return extractColors(frame, polygons);
+    // Use the optimized mask-based extraction
+    return extractSingleColorWithMask(frame, mask, bbox);
 }
 
 } // namespace TVLED

@@ -319,6 +319,11 @@ bool LEDController::setupCoonsPatching(int imageWidth, int imageHeight) {
                  std::to_string(timer.elapsedMilliseconds()) + " ms");
     }
     
+    // Pre-compute masks for optimal performance (masks don't change between frames)
+    if (color_extractor_ && !cell_polygons_.empty()) {
+        color_extractor_->precomputeMasks(cell_polygons_, imageWidth, imageHeight);
+    }
+    
     return true;
 }
 
