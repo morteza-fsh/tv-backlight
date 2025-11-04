@@ -25,7 +25,8 @@ The camera code now uses the **simplest possible approach** - just pipes from `r
 - ✅ **Dual Mode Operation**: Debug mode (static images) and Live mode (camera input)
 - ✅ **Coons Patch Interpolation**: Advanced curved screen mapping using Bézier curves
 - ✅ **HyperHDR Integration**: Flatbuffer protocol support for LED communication
-- ✅ **High Performance**: OpenMP parallelization and optimized color extraction
+- ✅ **High Performance**: OpenMP parallelization and ARM NEON SIMD acceleration
+- ✅ **NEON SIMD Optimization**: 2-4x faster color extraction on ARM platforms
 - ✅ **Flexible LED Layouts**: Support for both grid and HyperHDR edge-based layouts
 - ✅ **Raspberry Pi 5 Ready**: Simple pipe-based camera with ultra-low latency (~20ms/frame)
 - ✅ **Configurable FPS**: Target frame rate control or maximum speed mode
@@ -260,7 +261,9 @@ The `config.json` file controls all aspects of the application:
 **ColorExtractor** - Dominant color calculation
 - Extracts average colors from curved regions
 - OpenMP parallelization for performance
+- ARM NEON SIMD acceleration (processes 16 pixels at a time)
 - Converts BGR to RGB for HyperHDR
+- Automatic fallback to scalar code on non-ARM platforms
 
 ### Communication Modules
 
@@ -292,7 +295,29 @@ The `config.json` file controls all aspects of the application:
 On a typical setup:
 - **Debug mode (single frame)**: ~100ms total (1ms polygon generation, 15ms color extraction)
 - **Color extraction**: Parallelized with OpenMP for maximum throughput
+- **NEON SIMD Optimization**: ARM NEON intrinsics accelerate color extraction by 2-4x on ARM platforms (Apple Silicon, Raspberry Pi)
 - **Target**: Optimized for maximum FPS on Raspberry Pi 5
+
+### ARM NEON SIMD Acceleration
+
+The color extraction module automatically uses ARM NEON SIMD instructions when building for ARM platforms:
+
+- ✅ **2-4x faster** color extraction on ARM devices
+- ✅ **Automatic detection** - no configuration needed
+- ✅ **Processes 16 pixels at a time** using SIMD instructions
+- ✅ **Fallback to scalar code** on non-ARM platforms
+
+**Supported platforms:**
+- Apple Silicon Macs (M1, M2, M3, etc.)
+- Raspberry Pi 3/4/5 (ARM64)
+- Other ARMv7/ARMv8 devices with NEON
+
+For more details, see [NEON_OPTIMIZATION.md](NEON_OPTIMIZATION.md).
+
+**Benchmark:**
+```bash
+./benchmark_neon.sh  # Verify NEON is enabled and measure performance
+```
 
 ## Output
 
