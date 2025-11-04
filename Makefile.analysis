@@ -1,0 +1,22 @@
+# Makefile for performance analysis tools
+# Usage: make -f Makefile.analysis
+
+CXX = g++
+CXXFLAGS = -O3 -march=native -std=c++17
+OPENCV_FLAGS = $(shell pkg-config --cflags --libs opencv4)
+
+all: analyze_bottleneck
+
+analyze_bottleneck: analyze_bottleneck.cpp
+	$(CXX) $(CXXFLAGS) -o analyze_bottleneck analyze_bottleneck.cpp $(OPENCV_FLAGS)
+	@echo ""
+	@echo "✅ Analysis tool built successfully!"
+	@echo ""
+	@echo "Run with: ./analyze_bottleneck"
+	@echo ""
+
+clean:
+	rm -f analyze_bottleneck
+
+.PHONY: all clean
+

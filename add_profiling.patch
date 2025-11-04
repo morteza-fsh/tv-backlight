@@ -1,0 +1,132 @@
+--- a/src/processing/ColorExtractor.cpp
++++ b/src/processing/ColorExtractor.cpp
+@@ -250,6 +250,24 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
+                                                     const cv::Mat& mask,
+                                                     const cv::Rect& bbox) {
++    // Profiling
++    static long long total_time_us = 0;
++    static long long neon_time_us = 0;
++    static long long scalar_time_us = 0;
++    static int call_count = 0;
++    auto func_start = std::chrono::high_resolution_clock::now();
++    
+     if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
+         return cv::Vec3b(0, 0, 0);
+     }
+@@ -260,6 +278,7 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
+ #ifdef USE_NEON_SIMD
+     // NEON SIMD optimized path - processes 16 pixels at a time
++    auto neon_start = std::chrono::high_resolution_clock::now();
+     for (int y = 0; y < bbox.height; y++) {
+         const uchar* mask_row = mask.ptr<uchar>(y);
+         const cv::Vec3b* img_row = frame.ptr<cv::Vec3b>(bbox.y + y) + bbox.x;
+@@ -267,6 +286,8 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
+         accumulateColorsNEON(img_row, mask_row, bbox.width, 
+                             sum_b, sum_g, sum_r, pixel_count);
+     }
++    auto neon_end = std::chrono::high_resolution_clock::now();
++    neon_time_us += std::chrono::duration_cast<std::chrono::microseconds>(neon_end - neon_start).count();
+ #else
+     // Scalar fallback for non-ARM platforms
+     for (int y = 0; y < bbox.height; y++) {
+@@ -293,6 +314,21 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
+         return cv::Vec3b(r, g, b);  // Return as RGB
+     }
+     
++    // Update profiling stats
++    auto func_end = std::chrono::high_resolution_clock::now();
++    total_time_us += std::chrono::duration_cast<std::chrono::microseconds>(func_end - func_start).count();
++    call_count++;
++    
++    // Print stats every 100 calls
++    if (call_count % 100 == 0) {
++        LOG_INFO("=== Color Extraction Stats (last 100 calls) ===");
++        LOG_INFO("  Total time: " + std::to_string(total_time_us / 1000.0) + " ms");
++        LOG_INFO("  NEON time: " + std::to_string(neon_time_us / 1000.0) + " ms (" + 
++                 std::to_string(100.0 * neon_time_us / std::max(1LL, total_time_us)) + "%)");
++        LOG_INFO("  Avg per call: " + std::to_string(total_time_us / 100.0) + " μs");
++        total_time_us = neon_time_us = scalar_time_us = 0;
++    }
++    
+     return cv::Vec3b(0, 0, 0);
+ }
+
+--- a/src/core/LEDController.cpp
++++ b/src/core/LEDController.cpp
+@@ -424,15 +424,36 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
+     
+     PerformanceTimer total_timer("Total frame processing", false);
+     
++    // Time frame acquisition
++    PerformanceTimer io_timer("Frame I/O", false);
+     // Get frame
+     cv::Mat frame;
+     if (!frame_source_->getFrame(frame)) {
+         LOG_ERROR("Failed to get frame");
+         return false;
+     }
++    io_timer.stop();
++    LOG_INFO("  Frame I/O: " + std::to_string(io_timer.elapsedMicroseconds()) + " μs");
+     
+     LOG_INFO("Processing frame: " + std::to_string(frame.cols) + "x" + 
+              std::to_string(frame.rows));
+     
++    // Time setup (first frame only)
++    PerformanceTimer setup_timer("Setup", false);
++    if (!coons_patching_) {
++        if (!setupBezierCurves()) {
++            return false;
++        }
++        if (!setupCoonsPatching(frame.cols, frame.rows)) {
++            return false;
++        }
++        setup_timer.stop();
++        LOG_INFO("  First frame setup: " + std::to_string(setup_timer.elapsedMilliseconds()) + " ms");
++    }
++    
++    // Time color extraction
++    PerformanceTimer extract_timer("Color Extraction", false);
+     // Process frame
+     std::vector<cv::Vec3b> colors;
+     if (!processFrame(frame, colors)) {
+@@ -440,6 +461,8 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
+         return false;
+     }
++    extract_timer.stop();
++    LOG_INFO("  Color Extraction: " + std::to_string(extract_timer.elapsedMicroseconds()) + " μs");
+     
+     // Log colors
+     std::stringstream ss;
+@@ -456,6 +479,7 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
+     LOG_INFO(ss.str());
+     
+     // Send to HyperHDR
++    PerformanceTimer network_timer("Network", false);
+     if (hyperhdr_client_ && hyperhdr_client_->isConnected()) {
+         bool success = false;
+         if (config_.hyperhdr.use_linear_format) {
+@@ -473,6 +497,8 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
+             LOG_WARN("Failed to send colors to HyperHDR");
+         }
+     }
++    network_timer.stop();
++    LOG_INFO("  Network I/O: " + std::to_string(network_timer.elapsedMicroseconds()) + " μs");
+     
+     // Save debug images
+     if (saveDebugImages) {
+@@ -483,6 +509,14 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
+     
+     total_timer.stop();
+     LOG_INFO("Frame processed in " + std::to_string(total_timer.elapsedMilliseconds()) + " ms");
++    
++    // Print breakdown
++    LOG_INFO("=== Time Breakdown ===");
++    LOG_INFO("  I/O: " + std::to_string(100.0 * io_timer.elapsedMicroseconds() / total_timer.elapsedMicroseconds()) + "%");
++    LOG_INFO("  Extraction: " + std::to_string(100.0 * extract_timer.elapsedMicroseconds() / total_timer.elapsedMicroseconds()) + "%");
++    LOG_INFO("  Network: " + std::to_string(100.0 * network_timer.elapsedMicroseconds() / total_timer.elapsedMicroseconds()) + "%");
++    LOG_INFO("  Other: " + std::to_string(100.0 - 100.0 * (io_timer.elapsedMicroseconds() + extract_timer.elapsedMicroseconds() + network_timer.elapsedMicroseconds()) / total_timer.elapsedMicroseconds()) + "%");
++    LOG_INFO("======================");
+     
+     return true;
+ }
+
