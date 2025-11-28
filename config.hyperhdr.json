@@ -7,7 +7,7 @@
     "device": "/dev/video0",
     "width": 1640,
     "height": 1232,
-    "fps": 41,
+    "fps": 25,
     "sensor_mode": -1,
     "autofocus_mode": "manual",
     "lens_position": 5.0,
@@ -18,11 +18,17 @@
   },
   
   "hyperhdr": {
-    "enabled": true,
+    "enabled": false,
     "host": "127.0.0.1",
     "port": 19400,
     "priority": 100,
     "use_linear_format": true
+  },
+  
+  "usb": {
+    "enabled": true,
+    "device": "/dev/ttyUSB0",
+    "baudrate": 921600
   },
   
   "led_layout": {

@@ -62,6 +62,14 @@ bool Config::loadFromFile(const std::string& filename) {
             hyperhdr.use_linear_format = hdr.value("use_linear_format", false);
         }
         
+        // Parse USB settings
+        if (j.contains("usb")) {
+            auto usb_cfg = j["usb"];
+            usb.enabled = usb_cfg.value("enabled", false);
+            usb.device = usb_cfg.value("device", "/dev/ttyUSB0");
+            usb.baudrate = usb_cfg.value("baudrate", 115200);
+        }
+        
         // Parse LED layout
         if (j.contains("led_layout")) {
             auto layout = j["led_layout"];
@@ -186,6 +194,10 @@ bool Config::saveToFile(const std::string& filename) const {
         j["hyperhdr"]["port"] = hyperhdr.port;
         j["hyperhdr"]["priority"] = hyperhdr.priority;
         j["hyperhdr"]["use_linear_format"] = hyperhdr.use_linear_format;
+        
+        j["usb"]["enabled"] = usb.enabled;
+        j["usb"]["device"] = usb.device;
+        j["usb"]["baudrate"] = usb.baudrate;
         
         j["led_layout"]["format"] = led_layout.format;
         j["led_layout"]["grid"]["rows"] = led_layout.grid_rows;

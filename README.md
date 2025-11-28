@@ -24,6 +24,8 @@ The camera code now uses the **simplest possible approach** - just pipes from `r
 - ✅ **Modular Architecture**: Clean separation of concerns with dedicated modules for each task
 - ✅ **Dual Mode Operation**: Debug mode (static images) and Live mode (camera input)
 - ✅ **Coons Patch Interpolation**: Advanced curved screen mapping using Bézier curves
+- ✅ **Dual Output Support**: HyperHDR network or direct USB serial control
+- ✅ **USB Direct Mode**: Send RGB data directly to Arduino/ESP32 via USB serial (NEW!)
 - ✅ **HyperHDR Integration**: Flatbuffer protocol support for LED communication
 - ✅ **High Performance**: OpenMP parallelization and ARM NEON SIMD acceleration
 - ✅ **NEON SIMD Optimization**: 2-4x faster color extraction on ARM platforms
@@ -152,6 +154,14 @@ Options:
 ./build/bin/app --live
 ```
 
+#### With USB Direct Control (Arduino/ESP32)
+```bash
+# Upload examples/arduino_usb_receiver.ino to your Arduino/ESP32
+# Edit config.json to enable USB and set device path
+./build/bin/app --live
+```
+See [USB_QUICK_START.md](USB_QUICK_START.md) for detailed setup instructions.
+
 ## Configuration
 
 The `config.json` file controls all aspects of the application:
@@ -174,6 +184,12 @@ The `config.json` file controls all aspects of the application:
     "host": "127.0.0.1",             // HyperHDR server address
     "port": 19400,                    // HyperHDR server port
     "priority": 100                   // Priority level
+  },
+  
+  "usb": {
+    "enabled": false,                 // Enable USB direct control (NEW!)
+    "device": "/dev/ttyUSB0",        // USB serial device path
+    "baudrate": 115200                // Serial baud rate
   },
   
   "led_layout": {

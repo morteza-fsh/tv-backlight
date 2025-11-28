@@ -7,6 +7,7 @@
 #include "processing/ColorExtractor.h"
 #include "communication/LEDLayout.h"
 #include "communication/HyperHDRClient.h"
+#include "communication/USBController.h"
 #include <memory>
 #include <atomic>
 
@@ -38,6 +39,7 @@ private:
     bool setupColorExtractor();
     bool setupLEDLayout();
     bool setupHyperHDRClient();
+    bool setupUSBController();
     
     // Processing
     bool processFrame(const cv::Mat& frame, std::vector<cv::Vec3b>& colors);
@@ -53,6 +55,7 @@ private:
     std::unique_ptr<ColorExtractor> color_extractor_;
     std::unique_ptr<LEDLayout> led_layout_;
     std::unique_ptr<HyperHDRClient> hyperhdr_client_;
+    std::unique_ptr<USBController> usb_controller_;
     
     BezierCurve top_bezier_, right_bezier_, bottom_bezier_, left_bezier_;
     

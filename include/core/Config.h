@@ -35,6 +35,12 @@ struct HyperHDRConfig {
     bool use_linear_format = false;  // true = 1-pixel tall linear format, false = layout-based 2D format
 };
 
+struct USBConfig {
+    bool enabled = false;
+    std::string device = "/dev/ttyUSB0";  // Serial device path (e.g., /dev/ttyUSB0, /dev/ttyACM0)
+    int baudrate = 115200;                // Baud rate (115200, 230400, 460800, 921600, etc.)
+};
+
 struct LEDLayoutConfig {
     std::string format = "grid";  // "grid" or "hyperhdr"
     
@@ -110,6 +116,7 @@ public:
     // Sub-configurations
     CameraConfig camera;
     HyperHDRConfig hyperhdr;
+    USBConfig usb;
     LEDLayoutConfig led_layout;
     BezierConfig bezier;
     PerformanceConfig performance;

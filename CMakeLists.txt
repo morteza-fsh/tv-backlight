@@ -199,6 +199,7 @@ set(SOURCES
     src/processing/ColorExtractor.cpp
     src/communication/LEDLayout.cpp
     src/communication/HyperHDRClient.cpp
+    src/communication/USBController.cpp
 )
 
 # Add executables

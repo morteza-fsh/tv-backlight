@@ -55,6 +55,13 @@ bool LEDController::initialize() {
         }
     }
     
+    // Setup USB controller (optional)
+    if (config_.usb.enabled) {
+        if (!setupUSBController()) {
+            LOG_WARN("Failed to setup USB controller, continuing without it");
+        }
+    }
+    
     initialized_ = true;
     LOG_INFO("LED Controller initialized successfully");
     return true;
@@ -399,6 +406,24 @@ bool LEDController::setupHyperHDRClient() {
     return true;
 }
 
+bool LEDController::setupUSBController() {
+    LOG_INFO("Setting up USB controller...");
+    
+    usb_controller_ = std::make_unique<USBController>(
+        config_.usb.device,
+        config_.usb.baudrate
+    );
+    
+    if (!usb_controller_->connect()) {
+        LOG_ERROR("Failed to connect to USB device");
+        return false;
+    }
+    
+    LOG_INFO("USB controller ready at " + config_.usb.device + 
+             " @ " + std::to_string(config_.usb.baudrate) + " baud");
+    return true;
+}
+
 bool LEDController::processFrame(const cv::Mat& frame, std::vector<cv::Vec3b>& colors) {
     // Setup Coons patching if not already done (needs frame dimensions)
     if (!coons_patching_) {
@@ -471,6 +496,15 @@ bool LEDController::processSingleFrame(bool saveDebugImages) {
                      (config_.hyperhdr.use_linear_format ? "linear format" : "layout format") + ")");
         } else {
             LOG_WARN("Failed to send colors to HyperHDR");
+        }
+    }
+    
+    // Send to USB device
+    if (usb_controller_ && usb_controller_->isConnected()) {
+        if (usb_controller_->sendColors(colors)) {
+            LOG_INFO("Sent " + std::to_string(colors.size()) + " colors to USB device");
+        } else {
+            LOG_WARN("Failed to send colors to USB device");
         }
     }
     
