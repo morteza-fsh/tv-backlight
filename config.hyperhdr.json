@@ -11,10 +11,27 @@
     "enable_scaling": true,
     "scaled_width": 820,
     "scaled_height": 616,
-    "fps": 30,
+    "fps": 41,
     "autofocus_mode": "manual",
-    "lens_position": 0.0,
-    "awb_mode": "incandescent"
+    "lens_position": 664.0,
+    "awb_mode": "custom",
+    "awb_gain_red": 1.5456334352493286,
+    "awb_gain_blue": 1.5098679065704346,
+    "awb_temperature": 5264.0,
+    "analogue_gain": 6.564102649688721,
+    "digital_gain": 1.0207030773162842,
+    "exposure_time": 33251,
+    "color_correction_matrix": [
+      2.2541825771331787,
+      -0.7994374632835388,
+      -0.4547450542449951,
+      -0.6689324975013733,
+      2.673513650894165,
+      -1.004586100578308,
+      -0.2698446810245514,
+      -0.6262826919555664,
+      1.8961273431777954
+    ]
   },
   
   "hyperhdr": {

@@ -20,6 +20,19 @@ struct CameraConfig {
     std::string awb_mode = "auto";  // "auto", "incandescent", "tungsten", "fluorescent", "indoor", "daylight", "cloudy", "custom"
     float awb_gain_red = 0.0f;   // Red gain for custom white balance (0.0 = use auto)
     float awb_gain_blue = 0.0f;  // Blue gain for custom white balance (0.0 = use auto)
+    float awb_temperature = 0.0f;  // Color temperature in Kelvin (0.0 = use auto/awb_mode)
+    
+    // Gain configuration
+    float analogue_gain = 0.0f;   // Analogue gain (0.0 = auto)
+    float digital_gain = 0.0f;    // Digital gain (0.0 = auto)
+    
+    // Exposure configuration
+    int exposure_time = 0;  // Exposure time in microseconds (0 = auto)
+    
+    // Color correction matrix (3x3 matrix, stored as 9 values row-major)
+    // [m00, m01, m02, m10, m11, m12, m20, m21, m22]
+    // If all zeros, color correction matrix is not applied
+    std::vector<float> color_correction_matrix;
     
     // Scaling configuration
     bool enable_scaling = true;

@@ -18,6 +18,8 @@ public:
     CameraFrameSource(const std::string& device, int width, int height, int fps, int sensor_mode = -1,
                      const std::string& autofocus_mode = "default", float lens_position = 0.0f,
                      const std::string& awb_mode = "auto", float awb_gain_red = 0.0f, float awb_gain_blue = 0.0f,
+                     float awb_temperature = 0.0f, float analogue_gain = 0.0f, float digital_gain = 0.0f,
+                     int exposure_time = 0, const std::vector<float>& color_correction_matrix = {},
                      bool enable_scaling = true, int scaled_width = 960, int scaled_height = 540);
     ~CameraFrameSource() override;
     
@@ -38,6 +40,11 @@ private:
     std::string awb_mode_;
     float awb_gain_red_;
     float awb_gain_blue_;
+    float awb_temperature_;
+    float analogue_gain_;
+    float digital_gain_;
+    int exposure_time_;
+    std::vector<float> color_correction_matrix_;
     bool initialized_;
     
     // Scaling configuration

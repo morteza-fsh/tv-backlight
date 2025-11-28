@@ -11,10 +11,14 @@ namespace TVLED {
 CameraFrameSource::CameraFrameSource(const std::string& device, int width, int height, int fps, int sensor_mode,
                                      const std::string& autofocus_mode, float lens_position,
                                      const std::string& awb_mode, float awb_gain_red, float awb_gain_blue,
+                                     float awb_temperature, float analogue_gain, float digital_gain,
+                                     int exposure_time, const std::vector<float>& color_correction_matrix,
                                      bool enable_scaling, int scaled_width, int scaled_height)
     : device_(device), width_(width), height_(height), fps_(fps), sensor_mode_(sensor_mode),
       autofocus_mode_(autofocus_mode), lens_position_(lens_position),
       awb_mode_(awb_mode), awb_gain_red_(awb_gain_red), awb_gain_blue_(awb_gain_blue),
+      awb_temperature_(awb_temperature), analogue_gain_(analogue_gain), digital_gain_(digital_gain),
+      exposure_time_(exposure_time), color_correction_matrix_(color_correction_matrix),
       initialized_(false), camera_pipe_(nullptr),
       enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height) {
 }
@@ -72,6 +76,35 @@ bool CameraFrameSource::initialize() {
             if (awb_mode_ == "custom" && awb_gain_red_ > 0.0f && awb_gain_blue_ > 0.0f) {
                 cmd += " --awbgains " + std::to_string(awb_gain_red_) + "," + std::to_string(awb_gain_blue_);
             }
+        }
+        
+        // Add color temperature if specified
+        if (awb_temperature_ > 0.0f) {
+            cmd += " --awb-temperature " + std::to_string(static_cast<int>(awb_temperature_));
+        }
+        
+        // Add gain settings
+        if (analogue_gain_ > 0.0f) {
+            cmd += " --gain " + std::to_string(analogue_gain_);
+        }
+        if (digital_gain_ > 0.0f) {
+            cmd += " --digital-gain " + std::to_string(digital_gain_);
+        }
+        
+        // Add exposure time
+        if (exposure_time_ > 0) {
+            cmd += " --exposure " + std::to_string(exposure_time_) + "us";
+        }
+        
+        // Add color correction matrix if specified (9 values for 3x3 matrix)
+        if (color_correction_matrix_.size() == 9) {
+            // rpicam-vid expects CCM in format: m00,m01,m02,m10,m11,m12,m20,m21,m22
+            std::string ccm_str;
+            for (size_t i = 0; i < color_correction_matrix_.size(); ++i) {
+                if (i > 0) ccm_str += ",";
+                ccm_str += std::to_string(color_correction_matrix_[i]);
+            }
+            cmd += " --ccm " + ccm_str;
         }
         
         cmd += " --output -";  // Output to stdout

@@ -84,6 +84,11 @@ bool LEDController::setupFrameSource() {
             config_.camera.awb_mode,
             config_.camera.awb_gain_red,
             config_.camera.awb_gain_blue,
+            config_.camera.awb_temperature,
+            config_.camera.analogue_gain,
+            config_.camera.digital_gain,
+            config_.camera.exposure_time,
+            config_.camera.color_correction_matrix,
             config_.camera.enable_scaling,
             config_.camera.scaled_width,
             config_.camera.scaled_height

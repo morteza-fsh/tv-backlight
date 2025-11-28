@@ -45,6 +45,30 @@ bool Config::loadFromFile(const std::string& filename) {
             camera.awb_mode = cam.value("awb_mode", "auto");
             camera.awb_gain_red = cam.value("awb_gain_red", 0.0f);
             camera.awb_gain_blue = cam.value("awb_gain_blue", 0.0f);
+            camera.awb_temperature = cam.value("awb_temperature", 0.0f);
+            
+            // Parse gain settings
+            camera.analogue_gain = cam.value("analogue_gain", 0.0f);
+            camera.digital_gain = cam.value("digital_gain", 0.0f);
+            
+            // Parse exposure settings
+            camera.exposure_time = cam.value("exposure_time", 0);
+            
+            // Parse color correction matrix
+            if (cam.contains("color_correction_matrix") && cam["color_correction_matrix"].is_array()) {
+                camera.color_correction_matrix.clear();
+                for (const auto& val : cam["color_correction_matrix"]) {
+                    if (val.is_number()) {
+                        camera.color_correction_matrix.push_back(val.get<float>());
+                    }
+                }
+                // Validate: should be 9 values for 3x3 matrix
+                if (camera.color_correction_matrix.size() != 9) {
+                    LOG_WARN("Color correction matrix should have 9 values (3x3), got " + 
+                             std::to_string(camera.color_correction_matrix.size()));
+                    camera.color_correction_matrix.clear();
+                }
+            }
             
             // Parse scaling settings
             camera.enable_scaling = cam.value("enable_scaling", true);
@@ -185,6 +209,13 @@ bool Config::saveToFile(const std::string& filename) const {
         j["camera"]["awb_mode"] = camera.awb_mode;
         j["camera"]["awb_gain_red"] = camera.awb_gain_red;
         j["camera"]["awb_gain_blue"] = camera.awb_gain_blue;
+        j["camera"]["awb_temperature"] = camera.awb_temperature;
+        j["camera"]["analogue_gain"] = camera.analogue_gain;
+        j["camera"]["digital_gain"] = camera.digital_gain;
+        j["camera"]["exposure_time"] = camera.exposure_time;
+        if (!camera.color_correction_matrix.empty()) {
+            j["camera"]["color_correction_matrix"] = camera.color_correction_matrix;
+        }
         j["camera"]["enable_scaling"] = camera.enable_scaling;
         j["camera"]["scaled_width"] = camera.scaled_width;
         j["camera"]["scaled_height"] = camera.scaled_height;
