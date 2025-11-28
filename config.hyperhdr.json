@@ -14,7 +14,7 @@
     "fps": 30,
     "autofocus_mode": "manual",
     "lens_position": 0.0,
-    "awb_mode": "incandescent"  // Fixed white balance
+    "awb_mode": "incandescent"
   },
   
   "hyperhdr": {
