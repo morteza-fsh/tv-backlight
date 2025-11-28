@@ -77,8 +77,8 @@
   
   "scaling": {
     "scale_factor": 1,
-    "offset_x": -20,
-    "offset_y": -72
+    "offset_x": -14,
+    "offset_y": -52
   },
   
   "visualization": {
@@ -102,8 +102,9 @@
   
   "color_extraction": {
     "mode": "edge_slices",
-    "horizontal_coverage_percent": 20.0,
-    "vertical_coverage_percent": 35.0,
+    "method": "dominant",
+    "horizontal_coverage_percent": 30.0,
+    "vertical_coverage_percent": 25.0,
     "horizontal_slices": 20,
     "vertical_slices": 10
   }

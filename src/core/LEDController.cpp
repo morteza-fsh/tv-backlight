@@ -344,8 +344,9 @@ bool LEDController::setupColorExtractor() {
     
     color_extractor_ = std::make_unique<ColorExtractor>();
     color_extractor_->setParallelProcessing(config_.performance.enable_parallel_processing);
+    color_extractor_->setMethod(config_.color_extraction.method);
     
-    LOG_INFO("Color extractor ready");
+    LOG_INFO("Color extractor ready (method: " + config_.color_extraction.method + ")");
     return true;
 }
 

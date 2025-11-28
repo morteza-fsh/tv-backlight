@@ -7,9 +7,9 @@ namespace TVLED {
 
 class ColorExtractor {
 public:
-    ColorExtractor() : enable_parallel_(true), masks_precomputed_(false) {}
+    ColorExtractor() : enable_parallel_(true), masks_precomputed_(false), method_("mean") {}
     
-    // Extract dominant colors from regions defined by polygons
+    // Extract colors from regions defined by polygons
     // Returns RGB colors (converted from OpenCV's BGR)
     std::vector<cv::Vec3b> extractColors(const cv::Mat& frame,
                                          const std::vector<std::vector<cv::Point>>& polygons);
@@ -28,9 +28,13 @@ public:
     
     void setParallelProcessing(bool enable) { enable_parallel_ = enable; }
     bool isParallelProcessingEnabled() const { return enable_parallel_; }
+    
+    // Set color extraction method: "mean" or "dominant"
+    void setMethod(const std::string& method) { method_ = method; }
+    std::string getMethod() const { return method_; }
 
 private:
-    // Extract dominant color from a single polygon region
+    // Extract color from a single polygon region
     cv::Vec3b extractSingleColor(const cv::Mat& frame,
                                  const std::vector<cv::Point>& polygon,
                                  const cv::Rect& bbox);
@@ -40,8 +44,19 @@ private:
                                         const cv::Mat& mask,
                                         const cv::Rect& bbox);
     
+    // Extract mean color (average of all pixels)
+    cv::Vec3b extractMeanColor(const cv::Mat& frame,
+                               const cv::Mat& mask,
+                               const cv::Rect& bbox);
+    
+    // Extract dominant color using k-means clustering
+    cv::Vec3b extractDominantColor(const cv::Mat& frame,
+                                   const cv::Mat& mask,
+                                   const cv::Rect& bbox);
+    
     bool enable_parallel_;
     bool masks_precomputed_;
+    std::string method_;  // "mean" or "dominant"
     std::vector<cv::Mat> cached_masks_;
     std::vector<cv::Rect> cached_bboxes_;
 };

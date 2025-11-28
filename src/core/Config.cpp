@@ -173,6 +173,7 @@ bool Config::loadFromFile(const std::string& filename) {
         if (j.contains("color_extraction")) {
             auto ce = j["color_extraction"];
             color_extraction.mode = ce.value("mode", "edge_slices");
+            color_extraction.method = ce.value("method", "dominant");
             color_extraction.horizontal_coverage_percent = ce.value("horizontal_coverage_percent", 20.0f);
             color_extraction.vertical_coverage_percent = ce.value("vertical_coverage_percent", 20.0f);
             color_extraction.horizontal_slices = ce.value("horizontal_slices", 10);
@@ -263,6 +264,7 @@ bool Config::saveToFile(const std::string& filename) const {
         j["performance"]["parallel_chunk_size"] = performance.parallel_chunk_size;
         
         j["color_extraction"]["mode"] = color_extraction.mode;
+        j["color_extraction"]["method"] = color_extraction.method;
         j["color_extraction"]["horizontal_coverage_percent"] = color_extraction.horizontal_coverage_percent;
         j["color_extraction"]["vertical_coverage_percent"] = color_extraction.vertical_coverage_percent;
         j["color_extraction"]["horizontal_slices"] = color_extraction.horizontal_slices;
@@ -319,6 +321,11 @@ bool Config::validate() const {
     
     if (color_extraction.mode != "grid" && color_extraction.mode != "edge_slices") {
         LOG_ERROR("Invalid color extraction mode: " + color_extraction.mode);
+        valid = false;
+    }
+    
+    if (color_extraction.method != "mean" && color_extraction.method != "dominant") {
+        LOG_ERROR("Invalid color extraction method: " + color_extraction.method + " (must be 'mean' or 'dominant')");
         valid = false;
     }
     

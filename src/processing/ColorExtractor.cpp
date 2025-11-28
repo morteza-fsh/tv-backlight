@@ -254,6 +254,21 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
         return cv::Vec3b(0, 0, 0);
     }
     
+    // Route to appropriate extraction method
+    if (method_ == "dominant") {
+        return extractDominantColor(frame, mask, bbox);
+    } else {
+        return extractMeanColor(frame, mask, bbox);
+    }
+}
+
+cv::Vec3b ColorExtractor::extractMeanColor(const cv::Mat& frame,
+                                           const cv::Mat& mask,
+                                           const cv::Rect& bbox) {
+    if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
+        return cv::Vec3b(0, 0, 0);
+    }
+    
     // Color accumulators
     uint32_t sum_b = 0, sum_g = 0, sum_r = 0;
     int pixel_count = 0;
@@ -294,6 +309,89 @@ cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
     }
     
     return cv::Vec3b(0, 0, 0);
+}
+
+cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
+                                               const cv::Mat& mask,
+                                               const cv::Rect& bbox) {
+    if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
+        return cv::Vec3b(0, 0, 0);
+    }
+    
+    // Collect all masked pixels
+    std::vector<cv::Vec3b> pixels;
+    pixels.reserve(bbox.width * bbox.height);
+    
+    for (int y = 0; y < bbox.height; y++) {
+        const uchar* mask_row = mask.ptr<uchar>(y);
+        const cv::Vec3b* img_row = frame.ptr<cv::Vec3b>(bbox.y + y) + bbox.x;
+        
+        for (int x = 0; x < bbox.width; x++) {
+            if (mask_row[x]) {
+                pixels.push_back(img_row[x]);
+            }
+        }
+    }
+    
+    if (pixels.empty()) {
+        return cv::Vec3b(0, 0, 0);
+    }
+    
+    // For small regions, just use mean (k-means not effective)
+    if (pixels.size() < 10) {
+        uint32_t sum_b = 0, sum_g = 0, sum_r = 0;
+        for (const auto& pixel : pixels) {
+            sum_b += pixel[0];
+            sum_g += pixel[1];
+            sum_r += pixel[2];
+        }
+        uchar r = static_cast<uchar>(sum_r / pixels.size());
+        uchar g = static_cast<uchar>(sum_g / pixels.size());
+        uchar b = static_cast<uchar>(sum_b / pixels.size());
+        return cv::Vec3b(r, g, b);  // Return as RGB
+    }
+    
+    // Use k-means clustering to find dominant color
+    // Convert pixels to float for k-means
+    cv::Mat data(pixels.size(), 1, CV_32FC3);
+    for (size_t i = 0; i < pixels.size(); i++) {
+        data.at<cv::Vec3f>(i) = cv::Vec3f(
+            static_cast<float>(pixels[i][0]),
+            static_cast<float>(pixels[i][1]),
+            static_cast<float>(pixels[i][2])
+        );
+    }
+    
+    // Run k-means with k=3 clusters, find the largest cluster
+    int k = std::min(3, static_cast<int>(pixels.size()));
+    cv::Mat labels, centers;
+    cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 10, 1.0);
+    
+    cv::kmeans(data, k, labels, criteria, 3, cv::KMEANS_PP_CENTERS, centers);
+    
+    // Find the cluster with the most pixels
+    std::vector<int> cluster_counts(k, 0);
+    for (int i = 0; i < labels.rows; i++) {
+        cluster_counts[labels.at<int>(i)]++;
+    }
+    
+    int dominant_cluster = 0;
+    int max_count = cluster_counts[0];
+    for (int i = 1; i < k; i++) {
+        if (cluster_counts[i] > max_count) {
+            max_count = cluster_counts[i];
+            dominant_cluster = i;
+        }
+    }
+    
+    // Get the center color of the dominant cluster
+    cv::Vec3f center = centers.at<cv::Vec3f>(dominant_cluster);
+    
+    // Convert BGR to RGB and return
+    uchar r = static_cast<uchar>(center[2]);
+    uchar g = static_cast<uchar>(center[1]);
+    uchar b = static_cast<uchar>(center[0]);
+    return cv::Vec3b(r, g, b);  // Return as RGB
 }
 
 cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,

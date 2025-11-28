@@ -100,6 +100,7 @@ struct ColorSettingsConfig {
 
 struct ColorExtractionConfig {
     std::string mode = "edge_slices";  // "grid" or "edge_slices"
+    std::string method = "dominant";   // "mean" or "dominant" - how to extract color from region
     float horizontal_coverage_percent = 20.0f;  // 0-100
     float vertical_coverage_percent = 20.0f;    // 0-100
     int horizontal_slices = 10;  // Number of horizontal strips for top/bottom edges
