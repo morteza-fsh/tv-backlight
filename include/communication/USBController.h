@@ -13,11 +13,11 @@ namespace TVLED {
  * This class provides direct RGB data transmission to a USB-connected
  * LED controller (e.g., Arduino, ESP32) via serial port.
  * 
- * Protocol format:
- * - Header: 0xFF 0xFF 0xAA (3 bytes)
- * - LED count: 2 bytes (big-endian, max 65535 LEDs)
+ * Protocol format (Adalight/Adalight compatible):
+ * - Header: "Ada" (3 bytes: 'A', 'd', 'a')
+ * - LED count: 2 bytes (big-endian, value is ledCount - 1, max 65535 LEDs)
+ * - Checksum: 1 byte (hi ^ lo ^ 0x55)
  * - RGB data: N * 3 bytes (R, G, B for each LED)
- * - Checksum: 1 byte (XOR of all RGB data bytes)
  * 
  * Total packet size: 6 + (LED_COUNT * 3) bytes
  */

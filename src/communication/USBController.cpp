@@ -11,10 +11,10 @@
 namespace TVLED {
 
 namespace {
-    // Protocol constants
-    constexpr uint8_t HEADER_BYTE_1 = 0xFF;
-    constexpr uint8_t HEADER_BYTE_2 = 0xFF;
-    constexpr uint8_t HEADER_BYTE_3 = 0xAA;
+    // Protocol constants (Adalight protocol)
+    constexpr uint8_t HEADER_BYTE_1 = 'A';
+    constexpr uint8_t HEADER_BYTE_2 = 'd';
+    constexpr uint8_t HEADER_BYTE_3 = 'a';
     
     /**
      * Convert baud rate integer to termios speed constant
@@ -203,7 +203,7 @@ bool USBController::sendColors(const std::vector<cv::Vec3b>& colors) {
     auto packet = createPacket(colors);
     
     LOG_DEBUG("Packet size: " + std::to_string(packet.size()) + " bytes, " +
-              "header: " + formatHex(packet.data(), 16));
+              "header: " + formatHex(packet.data(), 6) + " (Adalight protocol)");
     
     // Send packet
     if (!writeData(packet.data(), packet.size())) {
@@ -221,43 +221,40 @@ std::vector<uint8_t> USBController::createPacket(const std::vector<cv::Vec3b>& c
     const uint16_t led_count = static_cast<uint16_t>(colors.size());
     const size_t rgb_data_size = led_count * 3;
     
-    // Packet structure:
-    // [HEADER(3)] [LED_COUNT(2)] [RGB_DATA(N*3)] [CHECKSUM(1)]
+    // Packet structure (Adalight protocol):
+    // [HEADER(3)] [LED_COUNT-1(2)] [CHECKSUM(1)] [RGB_DATA(N*3)]
     std::vector<uint8_t> packet;
     packet.reserve(6 + rgb_data_size);
     
-    // Header (3 bytes)
-    packet.push_back(HEADER_BYTE_1);
-    packet.push_back(HEADER_BYTE_2);
-    packet.push_back(HEADER_BYTE_3);
+    // Header (3 bytes): "Ada"
+    packet.push_back(HEADER_BYTE_1);  // 'A'
+    packet.push_back(HEADER_BYTE_2);  // 'd'
+    packet.push_back(HEADER_BYTE_3);  // 'a'
     
-    // LED count (2 bytes, big-endian)
-    packet.push_back(static_cast<uint8_t>(led_count >> 8));    // High byte
-    packet.push_back(static_cast<uint8_t>(led_count & 0xFF));  // Low byte
+    // LED count - 1 (2 bytes, big-endian) - Adalight protocol quirk
+    uint16_t led_count_minus_one = (led_count > 0) ? (led_count - 1) : 0;
+    uint8_t hi = static_cast<uint8_t>(led_count_minus_one >> 8);    // High byte
+    uint8_t lo = static_cast<uint8_t>(led_count_minus_one & 0xFF);  // Low byte
+    packet.push_back(hi);
+    packet.push_back(lo);
+    
+    // Checksum: hi ^ lo ^ 0x55 (Adalight protocol)
+    uint8_t checksum = hi ^ lo ^ 0x55;
+    packet.push_back(checksum);
     
     // RGB data (N * 3 bytes)
-    std::vector<uint8_t> rgb_data;
-    rgb_data.reserve(rgb_data_size);
-    
     for (const auto& color : colors) {
-        rgb_data.push_back(color[0]);  // R
-        rgb_data.push_back(color[1]);  // G
-        rgb_data.push_back(color[2]);  // B
+        packet.push_back(color[0]);  // R
+        packet.push_back(color[1]);  // G
+        packet.push_back(color[2]);  // B
     }
-    
-    // Calculate checksum before appending data
-    uint8_t checksum = calculateChecksum(rgb_data);
-    
-    // Append RGB data to packet
-    packet.insert(packet.end(), rgb_data.begin(), rgb_data.end());
-    
-    // Checksum (1 byte)
-    packet.push_back(checksum);
     
     return packet;
 }
 
 uint8_t USBController::calculateChecksum(const std::vector<uint8_t>& data) {
+    // Not used in Adalight protocol (checksum is hi ^ lo ^ 0x55)
+    // Kept for potential future use
     uint8_t checksum = 0;
     for (uint8_t byte : data) {
         checksum ^= byte;
