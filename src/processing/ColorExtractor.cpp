@@ -318,80 +318,114 @@ cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
         return cv::Vec3b(0, 0, 0);
     }
     
-    // Collect all masked pixels
-    std::vector<cv::Vec3b> pixels;
-    pixels.reserve(bbox.width * bbox.height);
+    // Use histogram-based approach for performance
+    // Quantize colors to 8 bins per channel (512 total bins)
+    constexpr int bins_per_channel = 8;
+    constexpr int bin_shift = 8 - 3;  // 2^3 = 8 bins
+    constexpr int total_bins = bins_per_channel * bins_per_channel * bins_per_channel;
     
+    // Count pixels in each quantized color bin
+    std::vector<int> histogram(total_bins, 0);
+    std::vector<uint32_t> sum_b(total_bins, 0);
+    std::vector<uint32_t> sum_g(total_bins, 0);
+    std::vector<uint32_t> sum_r(total_bins, 0);
+    int total_pixels = 0;
+    
+    // Build histogram (scalar implementation - SIMD not beneficial for histogram updates)
     for (int y = 0; y < bbox.height; y++) {
         const uchar* mask_row = mask.ptr<uchar>(y);
         const cv::Vec3b* img_row = frame.ptr<cv::Vec3b>(bbox.y + y) + bbox.x;
         
         for (int x = 0; x < bbox.width; x++) {
             if (mask_row[x]) {
-                pixels.push_back(img_row[x]);
+                const cv::Vec3b& pixel = img_row[x];
+                
+                // Quantize to bin indices
+                int b_bin = pixel[0] >> bin_shift;
+                int g_bin = pixel[1] >> bin_shift;
+                int r_bin = pixel[2] >> bin_shift;
+                
+                // Compute linear bin index
+                int bin_idx = (r_bin * bins_per_channel * bins_per_channel) + 
+                             (g_bin * bins_per_channel) + b_bin;
+                
+                histogram[bin_idx]++;
+                sum_b[bin_idx] += pixel[0];
+                sum_g[bin_idx] += pixel[1];
+                sum_r[bin_idx] += pixel[2];
+                total_pixels++;
             }
         }
     }
     
-    if (pixels.empty()) {
+    if (total_pixels == 0) {
         return cv::Vec3b(0, 0, 0);
     }
     
-    // For small regions, just use mean (k-means not effective)
-    if (pixels.size() < 10) {
-        uint32_t sum_b = 0, sum_g = 0, sum_r = 0;
-        for (const auto& pixel : pixels) {
-            sum_b += pixel[0];
-            sum_g += pixel[1];
-            sum_r += pixel[2];
+    // Find the bin with the most pixels (dominant color)
+    int max_bin = 0;
+    int max_count = histogram[0];
+    
+#ifdef USE_NEON_SIMD
+    // NEON optimization for finding maximum in histogram
+    // Process 4 elements at a time
+    int32x4_t max_count_vec = vdupq_n_s32(histogram[0]);
+    const int32_t init_bins[4] = {0, 1, 2, 3};
+    int32x4_t max_bin_vec = vld1q_s32(init_bins);
+    int32x4_t idx_increment = vdupq_n_s32(4);
+    int32x4_t current_idx = vld1q_s32(init_bins);
+    
+    for (int i = 0; i < total_bins - 3; i += 4) {
+        int32x4_t hist_vec = vld1q_s32(reinterpret_cast<const int32_t*>(&histogram[i]));
+        uint32x4_t cmp = vcgtq_s32(hist_vec, max_count_vec);
+        
+        // Update max values where comparison is true
+        max_count_vec = vbslq_s32(cmp, hist_vec, max_count_vec);
+        max_bin_vec = vbslq_s32(cmp, current_idx, max_bin_vec);
+        
+        current_idx = vaddq_s32(current_idx, idx_increment);
+    }
+    
+    // Reduce NEON results to scalar
+    int32_t counts[4], bins[4];
+    vst1q_s32(counts, max_count_vec);
+    vst1q_s32(bins, max_bin_vec);
+    
+    max_count = counts[0];
+    max_bin = bins[0];
+    for (int i = 1; i < 4; i++) {
+        if (counts[i] > max_count) {
+            max_count = counts[i];
+            max_bin = bins[i];
         }
-        uchar r = static_cast<uchar>(sum_r / pixels.size());
-        uchar g = static_cast<uchar>(sum_g / pixels.size());
-        uchar b = static_cast<uchar>(sum_b / pixels.size());
+    }
+    
+    // Handle remaining elements
+    for (int i = (total_bins & ~3); i < total_bins; i++) {
+        if (histogram[i] > max_count) {
+            max_count = histogram[i];
+            max_bin = i;
+        }
+    }
+#else
+    // Scalar fallback
+    for (int i = 1; i < total_bins; i++) {
+        if (histogram[i] > max_count) {
+            max_count = histogram[i];
+            max_bin = i;
+        }
+    }
+#endif
+    
+    // Calculate average color within the dominant bin
+    if (max_count > 0) {
+        uchar r = static_cast<uchar>(sum_r[max_bin] / max_count);
+        uchar g = static_cast<uchar>(sum_g[max_bin] / max_count);
+        uchar b = static_cast<uchar>(sum_b[max_bin] / max_count);
         return cv::Vec3b(r, g, b);  // Return as RGB
     }
     
-    // Use k-means clustering to find dominant color
-    // Convert pixels to float for k-means
-    cv::Mat data(pixels.size(), 1, CV_32FC3);
-    for (size_t i = 0; i < pixels.size(); i++) {
-        data.at<cv::Vec3f>(i) = cv::Vec3f(
-            static_cast<float>(pixels[i][0]),
-            static_cast<float>(pixels[i][1]),
-            static_cast<float>(pixels[i][2])
-        );
-    }
-    
-    // Run k-means with k=3 clusters, find the largest cluster
-    int k = std::min(3, static_cast<int>(pixels.size()));
-    cv::Mat labels, centers;
-    cv::TermCriteria criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 10, 1.0);
-    
-    cv::kmeans(data, k, labels, criteria, 3, cv::KMEANS_PP_CENTERS, centers);
-    
-    // Find the cluster with the most pixels
-    std::vector<int> cluster_counts(k, 0);
-    for (int i = 0; i < labels.rows; i++) {
-        cluster_counts[labels.at<int>(i)]++;
-    }
-    
-    int dominant_cluster = 0;
-    int max_count = cluster_counts[0];
-    for (int i = 1; i < k; i++) {
-        if (cluster_counts[i] > max_count) {
-            max_count = cluster_counts[i];
-            dominant_cluster = i;
-        }
-    }
-    
-    // Get the center color of the dominant cluster
-    cv::Vec3f center = centers.at<cv::Vec3f>(dominant_cluster);
-    
-    // Convert BGR to RGB and return
-    uchar r = static_cast<uchar>(center[2]);
-    uchar g = static_cast<uchar>(center[1]);
-    uchar b = static_cast<uchar>(center[0]);
-    return cv::Vec3b(r, g, b);  // Return as RGB
+    return cv::Vec3b(0, 0, 0);
 }
 
 cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
