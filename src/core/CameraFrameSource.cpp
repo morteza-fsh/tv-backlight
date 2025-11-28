@@ -78,33 +78,42 @@ bool CameraFrameSource::initialize() {
             }
         }
         
-        // Add color temperature if specified
-        if (awb_temperature_ > 0.0f) {
-            cmd += " --awb-temperature " + std::to_string(static_cast<int>(awb_temperature_));
-        }
+        // Note: awb-temperature is not supported by rpicam-vid
+        // Color temperature is implicitly set by AWB mode or custom gains
         
         // Add gain settings
         if (analogue_gain_ > 0.0f) {
             cmd += " --gain " + std::to_string(analogue_gain_);
         }
+        
+        // Note: digital-gain may not be supported on all rpicam-vid versions
+        // Keeping the parameter but it may be ignored
         if (digital_gain_ > 0.0f) {
-            cmd += " --digital-gain " + std::to_string(digital_gain_);
+            LOG_WARN("digital-gain parameter may not be supported by rpicam-vid");
+            // cmd += " --digital-gain " + std::to_string(digital_gain_);
         }
         
-        // Add exposure time
+        // Add exposure time (shutter speed in microseconds)
+        // Note: rpicam-vid uses --shutter for exposure time, not --exposure
+        // --exposure is for exposure mode (normal, sport, etc.)
         if (exposure_time_ > 0) {
-            cmd += " --exposure " + std::to_string(exposure_time_) + "us";
+            cmd += " --shutter " + std::to_string(exposure_time_);
         }
         
         // Add color correction matrix if specified (9 values for 3x3 matrix)
+        // NOTE: CCM requires explicit AWB gains to be set (awb_mode must be "custom")
         if (color_correction_matrix_.size() == 9) {
-            // rpicam-vid expects CCM in format: m00,m01,m02,m10,m11,m12,m20,m21,m22
-            std::string ccm_str;
-            for (size_t i = 0; i < color_correction_matrix_.size(); ++i) {
-                if (i > 0) ccm_str += ",";
-                ccm_str += std::to_string(color_correction_matrix_[i]);
+            if (awb_mode_ == "custom" && awb_gain_red_ > 0.0f && awb_gain_blue_ > 0.0f) {
+                // rpicam-vid expects CCM in format: m00,m01,m02,m10,m11,m12,m20,m21,m22
+                std::string ccm_str;
+                for (size_t i = 0; i < color_correction_matrix_.size(); ++i) {
+                    if (i > 0) ccm_str += ",";
+                    ccm_str += std::to_string(color_correction_matrix_[i]);
+                }
+                cmd += " --ccm " + ccm_str;
+            } else {
+                LOG_WARN("Color correction matrix requires awb_mode='custom' with explicit AWB gains");
             }
-            cmd += " --ccm " + ccm_str;
         }
         
         cmd += " --output -";  // Output to stdout
