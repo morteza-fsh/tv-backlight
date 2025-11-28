@@ -7,14 +7,15 @@
     "device": "/dev/video0",
     "width": 1640,
     "height": 1232,
-    "fps": 25,
     "sensor_mode": -1,
-    "autofocus_mode": "manual",
-    "lens_position": 5.0,
-    "awb_mode": "daylight",
     "enable_scaling": true,
     "scaled_width": 820,
-    "scaled_height": 616
+    "scaled_height": 616,
+    "fps": 30,
+    "autofocus_mode": "manual",
+    "lens_position": 0.0,
+    "awb_mode": "incandescent"  // Fixed white balance
+  }
   },
   
   "hyperhdr": {
