@@ -142,6 +142,8 @@ bool Config::loadFromFile(const std::string& filename) {
             scale_factor = scaling.value("scale_factor", 2.0f);
             offset_x = scaling.value("offset_x", 0.0f);
             offset_y = scaling.value("offset_y", 0.0f);
+            flip_horizontal = scaling.value("flip_horizontal", false);
+            flip_vertical = scaling.value("flip_vertical", false);
         }
         
         // Parse visualization settings
@@ -249,6 +251,10 @@ bool Config::saveToFile(const std::string& filename) const {
         j["bezier_settings"]["polygon_samples"] = bezier.polygon_samples;
         
         j["scaling"]["scale_factor"] = scale_factor;
+        j["scaling"]["offset_x"] = offset_x;
+        j["scaling"]["offset_y"] = offset_y;
+        j["scaling"]["flip_horizontal"] = flip_horizontal;
+        j["scaling"]["flip_vertical"] = flip_vertical;
         
         j["visualization"]["grid_cell_width"] = visualization.grid_cell_width;
         j["visualization"]["grid_cell_height"] = visualization.grid_cell_height;

@@ -13,14 +13,16 @@ CameraFrameSource::CameraFrameSource(const std::string& device, int width, int h
                                      const std::string& awb_mode, float awb_gain_red, float awb_gain_blue,
                                      float awb_temperature, float analogue_gain, float digital_gain,
                                      int exposure_time, const std::vector<float>& color_correction_matrix,
-                                     bool enable_scaling, int scaled_width, int scaled_height)
+                                     bool enable_scaling, int scaled_width, int scaled_height,
+                                     bool flip_horizontal, bool flip_vertical)
     : device_(device), width_(width), height_(height), fps_(fps), sensor_mode_(sensor_mode),
       autofocus_mode_(autofocus_mode), lens_position_(lens_position),
       awb_mode_(awb_mode), awb_gain_red_(awb_gain_red), awb_gain_blue_(awb_gain_blue),
       awb_temperature_(awb_temperature), analogue_gain_(analogue_gain), digital_gain_(digital_gain),
       exposure_time_(exposure_time), color_correction_matrix_(color_correction_matrix),
       initialized_(false), camera_pipe_(nullptr),
-      enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height) {
+      enable_scaling_(enable_scaling), scaled_width_(scaled_width), scaled_height_(scaled_height),
+      flip_horizontal_(flip_horizontal), flip_vertical_(flip_vertical) {
 }
 
 CameraFrameSource::~CameraFrameSource() {
@@ -238,10 +240,25 @@ bool CameraFrameSource::getFrame(cv::Mat& frame) {
         }
         
         // Scale down if enabled
+        cv::Mat scaled;
         if (enable_scaling_) {
-            cv::resize(bgr, frame, cv::Size(scaled_width_, scaled_height_));
+            cv::resize(bgr, scaled, cv::Size(scaled_width_, scaled_height_));
         } else {
-            frame = bgr;
+            scaled = bgr;
+        }
+        
+        // Apply flip transformations if enabled
+        if (flip_horizontal_ && flip_vertical_) {
+            // Flip both horizontally and vertically (equivalent to 180 degree rotation)
+            cv::flip(scaled, frame, -1);
+        } else if (flip_horizontal_) {
+            // Flip horizontally (around y-axis)
+            cv::flip(scaled, frame, 1);
+        } else if (flip_vertical_) {
+            // Flip vertically (around x-axis)
+            cv::flip(scaled, frame, 0);
+        } else {
+            frame = scaled;
         }
         
         return true;
@@ -274,6 +291,12 @@ std::string CameraFrameSource::getName() const {
                        "@" + std::to_string(fps_) + "fps)";
     if (enable_scaling_) {
         name += " -> scaled to " + std::to_string(scaled_width_) + "x" + std::to_string(scaled_height_);
+    }
+    if (flip_horizontal_ || flip_vertical_) {
+        name += " [flip:";
+        if (flip_horizontal_) name += " H";
+        if (flip_vertical_) name += " V";
+        name += "]";
     }
     return name;
 }

@@ -20,7 +20,8 @@ public:
                      const std::string& awb_mode = "auto", float awb_gain_red = 0.0f, float awb_gain_blue = 0.0f,
                      float awb_temperature = 0.0f, float analogue_gain = 0.0f, float digital_gain = 0.0f,
                      int exposure_time = 0, const std::vector<float>& color_correction_matrix = {},
-                     bool enable_scaling = true, int scaled_width = 960, int scaled_height = 540);
+                     bool enable_scaling = true, int scaled_width = 960, int scaled_height = 540,
+                     bool flip_horizontal = false, bool flip_vertical = false);
     ~CameraFrameSource() override;
     
     bool initialize() override;
@@ -51,6 +52,10 @@ private:
     bool enable_scaling_;
     int scaled_width_;
     int scaled_height_;
+    
+    // Flip configuration
+    bool flip_horizontal_;
+    bool flip_vertical_;
     
     // For piped camera input
     FILE* camera_pipe_;

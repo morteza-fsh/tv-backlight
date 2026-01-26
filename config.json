@@ -54,7 +54,9 @@
   "scaling": {
     "scale_factor": 1,
     "offset_x": -20,
-    "offset_y": -72
+    "offset_y": -72,
+    "flip_horizontal": false,
+    "flip_vertical": false
   },
   
   "grid": {

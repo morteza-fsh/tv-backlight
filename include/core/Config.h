@@ -142,6 +142,8 @@ public:
     float scale_factor = 2.0f;
     float offset_x = 0.0f;
     float offset_y = 0.0f;
+    bool flip_horizontal = false;
+    bool flip_vertical = false;
 };
 
 } // namespace TVLED

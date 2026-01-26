@@ -78,7 +78,9 @@
   "scaling": {
     "scale_factor": 1,
     "offset_x": -14,
-    "offset_y": -52
+    "offset_y": -52,
+    "flip_horizontal": false,
+    "flip_vertical": true
   },
   
   "visualization": {

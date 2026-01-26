@@ -91,7 +91,9 @@ bool LEDController::setupFrameSource() {
             config_.camera.color_correction_matrix,
             config_.camera.enable_scaling,
             config_.camera.scaled_width,
-            config_.camera.scaled_height
+            config_.camera.scaled_height,
+            config_.flip_horizontal,
+            config_.flip_vertical
         );
     } else {
         LOG_ERROR("Unknown mode: " + config_.mode);
