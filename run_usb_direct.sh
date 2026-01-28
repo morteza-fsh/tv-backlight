@@ -97,41 +97,33 @@ cleanup_leds() {
     # Kill the application if it's still running
     if [ -n "$APP_PID" ]; then
         kill "$APP_PID" 2>/dev/null || true
-        # Give it more time to release the serial port
+        # Give it time to release the serial port
         sleep 1
     fi
     
     LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
     
     if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
-        # Configure serial port (macOS uses -f, Linux uses -F)
-        case "$OSTYPE" in
-            darwin*)
-                stty -f "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
-                ;;
-            *)
-                stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
-                ;;
-        esac
-        
-        # Prepare Adalight packet with all LEDs set to 0
-        local hi=$(( (LED_COUNT - 1) >> 8 ))
-        local lo=$(( (LED_COUNT - 1) & 0xFF ))
-        local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
-        
-        # Send the off command multiple times to ensure Arduino receives it
-        local success=0
-        for i in 1 2 3; do
-            if printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null; then
-                success=1
-                sleep 0.05  # Small delay between sends
-            fi
-        done
-        
-        if [ $success -eq 1 ]; then
-            echo "✓ LEDs turned off"
+        # Use Python script for reliable serial communication
+        if command -v python3 >/dev/null 2>&1; then
+            python3 "$(dirname "$0")/turn_off_leds.py" "$USB_DEVICE" "$USB_BAUDRATE" "$LED_COUNT"
         else
-            echo "⚠ Failed to send LED off command"
+            echo "⚠ Python3 not found, trying direct method..."
+            # Fallback to direct serial write (less reliable)
+            case "$OSTYPE" in
+                darwin*)
+                    stty -f "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+                    ;;
+                *)
+                    stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+                    ;;
+            esac
+            
+            local hi=$(( (LED_COUNT - 1) >> 8 ))
+            local lo=$(( (LED_COUNT - 1) & 0xFF ))
+            local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
+            printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null
+            echo "✓ Command sent (may not work due to Arduino reset)"
         fi
     fi
 }
