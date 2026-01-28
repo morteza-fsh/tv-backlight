@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/TV/cpp
-ExecStart=/bin/bash /home/pi/TV/cpp/auto_run_with_tv.sh
+WorkingDirectory=/home/pi/tv-backlight
+ExecStart=/bin/bash /home/pi/tv-backlight/auto_run_with_tv.sh
 Restart=always
 RestartSec=10
 StandardOutput=journal
