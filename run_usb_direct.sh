@@ -105,11 +105,14 @@ cleanup_leds() {
     
     if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
         # Configure serial port (macOS uses -f, Linux uses -F)
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            stty -f "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
-        else
-            stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
-        fi
+        case "$OSTYPE" in
+            darwin*)
+                stty -f "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
+                ;;
+            *)
+                stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null || echo "⚠ Failed to configure serial port"
+                ;;
+        esac
         
         # Send Adalight packet with all LEDs set to 0
         local hi=$(( (LED_COUNT - 1) >> 8 ))
