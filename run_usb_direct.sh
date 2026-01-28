@@ -97,7 +97,14 @@ cleanup_leds() {
     LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
     
     if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
-        stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+        # Configure serial port (macOS uses -f, Linux uses -F)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            stty -f "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+        else
+            stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+        fi
+        
+        # Send Adalight packet with all LEDs set to 0
         local hi=$(( (LED_COUNT - 1) >> 8 ))
         local lo=$(( (LED_COUNT - 1) & 0xFF ))
         local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
