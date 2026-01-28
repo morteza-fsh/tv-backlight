@@ -62,17 +62,35 @@ turn_leds_off() {
     
     # Get config and USB device info
     CONFIG_FILE="$SCRIPT_DIR/config.hyperhdr.json"
+    
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}  ✗ Config file not found: $CONFIG_FILE${NC}"
+        return 1
+    fi
+    
     USB_DEVICE=$(grep -A 3 '"usb"' "$CONFIG_FILE" | grep '"device"' | cut -d'"' -f4)
     USB_BAUDRATE=$(grep -A 3 '"usb"' "$CONFIG_FILE" | grep '"baudrate"' | grep -o '[0-9]*')
     LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
     
-    if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
-        python3 -c "
+    echo "  Debug: USB_DEVICE=$USB_DEVICE, BAUDRATE=$USB_BAUDRATE, LED_COUNT=$LED_COUNT"
+    
+    if [ -z "$LED_COUNT" ] || [ "$LED_COUNT" -eq 0 ]; then
+        echo -e "${RED}  ✗ LED count is 0 or not found in config${NC}"
+        return 1
+    fi
+    
+    if [ ! -e "$USB_DEVICE" ]; then
+        echo -e "${RED}  ✗ USB device not found: $USB_DEVICE${NC}"
+        return 1
+    fi
+    
+    python3 -c "
 import sys
 import time
 try:
     import serial
     led_count = $LED_COUNT
+    print(f'  Sending OFF command: {led_count} LEDs to $USB_DEVICE @ $USB_BAUDRATE baud', file=sys.stderr)
     ser = serial.Serial('$USB_DEVICE', $USB_BAUDRATE, timeout=1)
     time.sleep(0.1)
     
@@ -87,12 +105,18 @@ try:
     ser.flush()
     time.sleep(0.1)
     ser.close()
-    print('  ✓ LEDs turned off', file=sys.stderr)
+    print('  ✓ LEDs turned off successfully', file=sys.stderr)
 except ImportError:
-    print('  ⚠ pyserial not installed', file=sys.stderr)
+    print('  ✗ pyserial not installed. Install with: pip3 install pyserial', file=sys.stderr)
+    sys.exit(1)
 except Exception as e:
-    print(f'  ⚠ Error: {e}', file=sys.stderr)
+    print(f'  ✗ Error turning off LEDs: {e}', file=sys.stderr)
+    sys.exit(1)
 " 2>&1
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}  ✗ Failed to turn off LEDs${NC}"
+        return 1
     fi
 }
 
