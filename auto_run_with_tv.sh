@@ -4,7 +4,7 @@
 
 TV_IP="176.16.1.111"
 CHECK_INTERVAL=5
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
 LED_PID=""
 
