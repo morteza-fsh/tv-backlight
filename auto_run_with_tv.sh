@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-TV_IP="176.16.1.111"
+TV_IP="172.16.1.111"
 CHECK_INTERVAL=5  # seconds between checks
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
