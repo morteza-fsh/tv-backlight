@@ -1,0 +1,16 @@
+[Unit]
+Description=TV LED Monitor - Auto start/stop LEDs based on TV state
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/TV/cpp
+ExecStart=/bin/bash /home/pi/TV/cpp/auto_run_with_tv.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
