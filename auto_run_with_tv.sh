@@ -2,7 +2,7 @@
 
 # Simple TV monitor - start/stop LED controller based on TV state
 
-TV_IP="176.16.1.111"
+TV_IP="172.16.1.111"
 CHECK_INTERVAL=5
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
