@@ -97,8 +97,8 @@ cleanup_leds() {
     # Kill the application if it's still running
     if [ -n "$APP_PID" ]; then
         kill "$APP_PID" 2>/dev/null || true
-        # Give it a moment to release the serial port
-        sleep 0.5
+        # Give it more time to release the serial port
+        sleep 1
     fi
     
     LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
@@ -114,12 +114,21 @@ cleanup_leds() {
                 ;;
         esac
         
-        # Send Adalight packet with all LEDs set to 0
+        # Prepare Adalight packet with all LEDs set to 0
         local hi=$(( (LED_COUNT - 1) >> 8 ))
         local lo=$(( (LED_COUNT - 1) & 0xFF ))
         local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
         
-        if printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null; then
+        # Send the off command multiple times to ensure Arduino receives it
+        local success=0
+        for i in 1 2 3; do
+            if printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null; then
+                success=1
+                sleep 0.05  # Small delay between sends
+            fi
+        done
+        
+        if [ $success -eq 1 ]; then
             echo "✓ LEDs turned off"
         else
             echo "⚠ Failed to send LED off command"
