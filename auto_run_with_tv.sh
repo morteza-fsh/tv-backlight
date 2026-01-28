@@ -8,6 +8,43 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
 LED_PID=""
 
+# Function to connect to TV via ADB
+connect_to_tv() {
+    echo "Connecting to TV at $TV_IP:5555..."
+    
+    # Try to connect
+    adb connect "$TV_IP:5555" > /dev/null 2>&1
+    sleep 2
+    
+    # Verify connection by checking devices list
+    if adb devices | grep -q "$TV_IP:5555.*device$"; then
+        echo "✓ Successfully connected to TV"
+        return 0
+    else
+        echo "✗ Failed to connect to TV"
+        return 1
+    fi
+}
+
+# Ensure TV is connected via ADB
+MAX_RETRIES=3
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if connect_to_tv; then
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        echo "Retrying ($RETRY_COUNT/$MAX_RETRIES)..."
+        sleep 2
+    else
+        echo "Failed to connect to TV after $MAX_RETRIES attempts. Exiting."
+        exit 1
+    fi
+done
+
+echo ""
+
 # Detect if we should use -s flag or not
 ADB_DEVICE_COUNT=$(adb devices | grep -v "List of devices" | grep -c "device$")
 if [ "$ADB_DEVICE_COUNT" -eq 1 ]; then
@@ -52,6 +89,17 @@ TV_WAS_ON=false
 while true; do
     # Check if TV is awake
     WAKEFULNESS=$($ADB_CMD shell dumpsys power 2>/dev/null | grep -i "Wakefulness")
+    
+    # If connection lost, try to reconnect
+    if [ -z "$WAKEFULNESS" ]; then
+        echo "[$(date '+%H:%M:%S')] Connection lost, attempting to reconnect..."
+        if connect_to_tv; then
+            echo "[$(date '+%H:%M:%S')] Reconnected successfully"
+            continue
+        else
+            echo "[$(date '+%H:%M:%S')] Reconnection failed, will retry next cycle"
+        fi
+    fi
     
     # Debug output
     echo "[$(date '+%H:%M:%S')] Wakefulness: $WAKEFULNESS"
