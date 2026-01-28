@@ -42,8 +42,15 @@ trap cleanup EXIT INT TERM
 TV_WAS_ON=false
 
 while true; do
-    # Check if TV is awake (with timeout)
-    TV_IS_ON=$(timeout 3 adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness.*Awake" && echo "yes" || echo "no")
+    # Check if TV is awake
+    WAKEFULNESS=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness")
+    
+    # Check if Wakefulness contains "Awake"
+    if echo "$WAKEFULNESS" | grep -qi "Awake"; then
+        TV_IS_ON="yes"
+    else
+        TV_IS_ON="no"
+    fi
     
     if [ "$TV_IS_ON" = "yes" ]; then
         if [ "$TV_WAS_ON" = false ]; then
