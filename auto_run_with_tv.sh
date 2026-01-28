@@ -1,158 +1,43 @@
 #!/bin/bash
 
-# Auto TV LED Controller - Monitor TV Power State
-# Automatically starts/stops LED controller based on Android TV power state
+# Simple TV monitor - start/stop LED controller based on TV state
 
-set -e
-
-# Configuration
-TV_IP="172.16.1.111"
-CHECK_INTERVAL=5  # seconds between checks
+TV_IP="176.16.1.111"
+CHECK_INTERVAL=5
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-echo -e "${BLUE}=== Auto TV LED Controller ===${NC}"
-echo "Monitoring TV at: $TV_IP"
-echo "Check interval: ${CHECK_INTERVAL}s"
-echo "Press Ctrl+C to stop monitoring"
-echo ""
-
-# PID of the LED script process
 LED_PID=""
 
-# Function to check if TV is awake
-check_tv_awake() {
-    local result=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness" | grep -i "Awake")
-    if [ -n "$result" ]; then
-        return 0  # TV is awake
-    else
-        return 1  # TV is asleep or unreachable
-    fi
-}
+echo "Monitoring TV at $TV_IP (checking every ${CHECK_INTERVAL}s)"
+echo "Press Ctrl+C to stop"
+echo ""
 
-# Function to check ADB connection
-ensure_adb_connected() {
-    # Check if device is already connected
-    if adb devices | grep -q "$TV_IP:5555"; then
-        return 0
-    fi
-    
-    # Try to connect
-    adb connect "$TV_IP:5555" >/dev/null 2>&1
-    sleep 1
-    
-    # Verify connection
-    if adb devices | grep -q "$TV_IP:5555"; then
-        return 0
-    else
-        return 1
-    fi
-}
+# Kill LED script on exit
+trap 'if [ -n "$LED_PID" ]; then kill $LED_PID 2>/dev/null; wait $LED_PID 2>/dev/null; fi' EXIT INT TERM
 
-# Function to start LED script
-start_led_script() {
-    if [ -n "$LED_PID" ] && kill -0 "$LED_PID" 2>/dev/null; then
-        return 0  # Already running
-    fi
-    
-    echo -e "${GREEN}▶ TV is ON - Starting LED controller${NC}"
-    "$LED_SCRIPT" > /tmp/tv_led_output.log 2>&1 &
-    LED_PID=$!
-    echo "  LED script PID: $LED_PID"
-}
-
-# Function to turn off LEDs directly
-turn_leds_off() {
-    CONFIG_FILE="$SCRIPT_DIR/config.hyperhdr.json"
-    USB_DEVICE=$(grep -A 3 '"usb"' "$CONFIG_FILE" 2>/dev/null | grep '"device"' | cut -d'"' -f4)
-    USB_BAUDRATE=$(grep -A 3 '"usb"' "$CONFIG_FILE" 2>/dev/null | grep '"baudrate"' | grep -o '[0-9]*')
-    LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" 2>/dev/null | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
-    
-    if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
-        stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
-        local hi=$(( (LED_COUNT - 1) >> 8 ))
-        local lo=$(( (LED_COUNT - 1) & 0xFF ))
-        local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
-        printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null
-    fi
-}
-
-# Function to stop LED script
-stop_led_script() {
-    if [ -z "$LED_PID" ]; then
-        return 0
-    fi
-    
-    if kill -0 "$LED_PID" 2>/dev/null; then
-        echo -e "${YELLOW}■ TV is OFF - Stopping LED controller${NC}"
-        kill -TERM "$LED_PID" 2>/dev/null || true
-        wait "$LED_PID" 2>/dev/null || true
-        LED_PID=""
-        
-        # Turn off LEDs after stopping
-        sleep 0.2
-        turn_leds_off
-        echo "  ✓ LEDs turned off"
-    else
-        LED_PID=""
-    fi
-}
-
-# Cleanup on script exit
-cleanup() {
-    echo ""
-    echo -e "${YELLOW}Shutting down monitor...${NC}"
-    stop_led_script
-    echo -e "${GREEN}Done${NC}"
-    exit 0
-}
-
-trap cleanup EXIT INT TERM
-
-# Main monitoring loop
-TV_STATE="unknown"
+# Main loop
+TV_WAS_ON=false
 
 while true; do
-    # Ensure ADB is connected
-    if ! ensure_adb_connected; then
-        if [ "$TV_STATE" != "disconnected" ]; then
-            echo -e "${RED}✗ Cannot connect to TV at $TV_IP${NC}"
-            echo "  Make sure ADB is enabled on the TV"
-            TV_STATE="disconnected"
-            stop_led_script
-        fi
-        sleep "$CHECK_INTERVAL"
-        continue
-    fi
+    # Check if TV is awake
+    TV_IS_ON=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness.*Awake" && echo "yes" || echo "no")
     
-    # Check TV power state
-    if check_tv_awake; then
-        if [ "$TV_STATE" != "awake" ]; then
-            TV_STATE="awake"
-            start_led_script
+    if [ "$TV_IS_ON" = "yes" ]; then
+        if [ "$TV_WAS_ON" = false ]; then
+            echo "TV ON - Starting LEDs"
+            "$LED_SCRIPT" > /tmp/tv_led.log 2>&1 &
+            LED_PID=$!
+            TV_WAS_ON=true
         fi
     else
-        if [ "$TV_STATE" != "asleep" ]; then
-            TV_STATE="asleep"
-            stop_led_script
-        fi
-    fi
-    
-    # Check if LED script crashed (only restart if TV is awake)
-    if [ "$TV_STATE" = "awake" ] && [ -n "$LED_PID" ]; then
-        if ! kill -0 "$LED_PID" 2>/dev/null; then
-            echo -e "${YELLOW}⚠ LED script stopped unexpectedly, restarting...${NC}"
+        if [ "$TV_WAS_ON" = true ]; then
+            echo "TV OFF - Stopping LEDs"
+            kill $LED_PID 2>/dev/null
+            wait $LED_PID 2>/dev/null
             LED_PID=""
-            start_led_script
+            TV_WAS_ON=false
         fi
     fi
     
-    sleep "$CHECK_INTERVAL"
+    sleep $CHECK_INTERVAL
 done
