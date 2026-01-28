@@ -12,15 +12,38 @@ echo "Monitoring TV at $TV_IP (checking every ${CHECK_INTERVAL}s)"
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Kill LED script on exit
-trap 'if [ -n "$LED_PID" ]; then kill $LED_PID 2>/dev/null; wait $LED_PID 2>/dev/null; fi' EXIT INT TERM
+# Cleanup function
+cleanup() {
+    echo ""
+    echo "Shutting down..."
+    if [ -n "$LED_PID" ] && kill -0 "$LED_PID" 2>/dev/null; then
+        echo "Stopping LED controller..."
+        kill "$LED_PID" 2>/dev/null
+        # Wait up to 3 seconds for graceful shutdown
+        for i in {1..6}; do
+            if ! kill -0 "$LED_PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.5
+        done
+        # Force kill if still running
+        if kill -0 "$LED_PID" 2>/dev/null; then
+            echo "Force stopping LED controller..."
+            kill -9 "$LED_PID" 2>/dev/null
+        fi
+    fi
+    exit 0
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
 
 # Main loop
 TV_WAS_ON=false
 
 while true; do
-    # Check if TV is awake
-    TV_IS_ON=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness.*Awake" && echo "yes" || echo "no")
+    # Check if TV is awake (with timeout)
+    TV_IS_ON=$(timeout 3 adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness.*Awake" && echo "yes" || echo "no")
     
     if [ "$TV_IS_ON" = "yes" ]; then
         if [ "$TV_WAS_ON" = false ]; then
@@ -32,8 +55,11 @@ while true; do
     else
         if [ "$TV_WAS_ON" = true ]; then
             echo "TV OFF - Stopping LEDs"
-            kill $LED_PID 2>/dev/null
-            wait $LED_PID 2>/dev/null
+            if [ -n "$LED_PID" ] && kill -0 "$LED_PID" 2>/dev/null; then
+                kill "$LED_PID" 2>/dev/null
+                # Don't wait indefinitely
+                sleep 1
+            fi
             LED_PID=""
             TV_WAS_ON=false
         fi
