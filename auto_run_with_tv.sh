@@ -8,7 +8,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LED_SCRIPT="$SCRIPT_DIR/run_usb_direct.sh"
 LED_PID=""
 
-echo "Monitoring TV at $TV_IP (checking every ${CHECK_INTERVAL}s)"
+# Detect if we should use -s flag or not
+ADB_DEVICE_COUNT=$(adb devices | grep -v "List of devices" | grep -c "device$")
+if [ "$ADB_DEVICE_COUNT" -eq 1 ]; then
+    ADB_CMD="adb"
+    echo "Monitoring TV (single ADB device, checking every ${CHECK_INTERVAL}s)"
+else
+    ADB_CMD="adb -s $TV_IP:5555"
+    echo "Monitoring TV at $TV_IP:5555 (checking every ${CHECK_INTERVAL}s)"
+fi
 echo "Press Ctrl+C to stop"
 echo ""
 
@@ -43,7 +51,7 @@ TV_WAS_ON=false
 
 while true; do
     # Check if TV is awake
-    WAKEFULNESS=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness")
+    WAKEFULNESS=$($ADB_CMD shell dumpsys power 2>/dev/null | grep -i "Wakefulness")
     
     # Debug output
     echo "[$(date '+%H:%M:%S')] Wakefulness: $WAKEFULNESS"
