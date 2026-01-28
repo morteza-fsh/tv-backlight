@@ -45,12 +45,17 @@ while true; do
     # Check if TV is awake
     WAKEFULNESS=$(adb -s "$TV_IP:5555" shell dumpsys power 2>/dev/null | grep -i "Wakefulness")
     
+    # Debug output
+    echo "[$(date '+%H:%M:%S')] Wakefulness: $WAKEFULNESS"
+    
     # Check if Wakefulness contains "Awake"
     if echo "$WAKEFULNESS" | grep -qi "Awake"; then
         TV_IS_ON="yes"
     else
         TV_IS_ON="no"
     fi
+    
+    echo "[$(date '+%H:%M:%S')] TV status: $TV_IS_ON"
     
     if [ "$TV_IS_ON" = "yes" ]; then
         if [ "$TV_WAS_ON" = false ]; then
