@@ -134,7 +134,7 @@ except Exception as e:
 }
 
 # Set up trap to clean up on exit
-trap cleanup_leds EXIT SIGINT SIGTERM
+trap cleanup_leds EXIT INT TERM
 
 # Run the application
 "$APP_PATH" \
