@@ -68,18 +68,38 @@ start_led_script() {
     echo "  LED script PID: $LED_PID"
 }
 
-# Function to stop LED script (run_usb_direct.sh will turn off LEDs via its trap)
+# Function to turn off LEDs directly
+turn_leds_off() {
+    CONFIG_FILE="$SCRIPT_DIR/config.hyperhdr.json"
+    USB_DEVICE=$(grep -A 3 '"usb"' "$CONFIG_FILE" 2>/dev/null | grep '"device"' | cut -d'"' -f4)
+    USB_BAUDRATE=$(grep -A 3 '"usb"' "$CONFIG_FILE" 2>/dev/null | grep '"baudrate"' | grep -o '[0-9]*')
+    LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" 2>/dev/null | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
+    
+    if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
+        stty -F "$USB_DEVICE" "$USB_BAUDRATE" raw -echo 2>/dev/null
+        local hi=$(( (LED_COUNT - 1) >> 8 ))
+        local lo=$(( (LED_COUNT - 1) & 0xFF ))
+        local chk=$(( (hi ^ lo ^ 0x55) & 0xFF ))
+        printf "Ada\\x$(printf '%02x' $hi)\\x$(printf '%02x' $lo)\\x$(printf '%02x' $chk)$(printf '\\x00%.0s' $(seq 1 $((LED_COUNT * 3))))" > "$USB_DEVICE" 2>/dev/null
+    fi
+}
+
+# Function to stop LED script
 stop_led_script() {
     if [ -z "$LED_PID" ]; then
         return 0
     fi
     
     if kill -0 "$LED_PID" 2>/dev/null; then
-        echo -e "${YELLOW}■ TV is OFF - Stopping LED controller (LEDs will turn off)${NC}"
+        echo -e "${YELLOW}■ TV is OFF - Stopping LED controller${NC}"
         kill -TERM "$LED_PID" 2>/dev/null || true
         wait "$LED_PID" 2>/dev/null || true
         LED_PID=""
-        echo "  LED controller stopped"
+        
+        # Turn off LEDs after stopping
+        sleep 0.2
+        turn_leds_off
+        echo "  ✓ LEDs turned off"
     else
         LED_PID=""
     fi
