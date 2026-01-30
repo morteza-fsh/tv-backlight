@@ -13,24 +13,24 @@
     "scaled_height": 616,
     "fps": 41,
     "autofocus_mode": "manual",
-    "lens_position": 664.0,
+    "lens_position": 5.0,
     "awb_mode": "custom",
-    "awb_gain_red": 1.5456334352493286,
-    "awb_gain_blue": 1.5098679065704346,
-    "awb_temperature": 5264.0,
-    "analogue_gain": 6.564102649688721,
-    "digital_gain": 1.0207030773162842,
-    "exposure_time": 33251,
+    "awb_gain_red": 1.3989813327789307,
+    "awb_gain_blue": 1.6303025484085083,
+    "awb_temperature": 4385.0,
+    "analogue_gain": 1.4970760345458984,
+    "digital_gain": 1.0024584531784058,
+    "exposure_time": 14347,
     "color_correction_matrix": [
-      2.2541825771331787,
-      -0.7994374632835388,
-      -0.4547450542449951,
-      -0.6689324975013733,
-      2.673513650894165,
-      -1.004586100578308,
-      -0.2698446810245514,
-      -0.6262826919555664,
-      1.8961273431777954
+      2.1831352710723877,
+      -0.6984059810638428,
+      -0.48472923040390015,
+      -0.7207037806510925,
+      2.747941255569458,
+      -1.0272424221038818,
+      -0.25288066267967224,
+      -0.7450495958328247,
+      1.9979302883148193
     ]
   },
   
@@ -76,9 +76,9 @@
   },
   
   "scaling": {
-    "scale_factor": 1,
-    "offset_x": -14,
-    "offset_y": -52,
+    "scale_factor": 1.025,
+    "offset_x": 9,
+    "offset_y": -43,
     "flip_horizontal": true,
     "flip_vertical": true
   },
@@ -105,10 +105,10 @@
   "color_extraction": {
     "mode": "edge_slices",
     "method": "dominant",
-    "horizontal_coverage_percent": 30.0,
-    "vertical_coverage_percent": 25.0,
-    "horizontal_slices": 20,
-    "vertical_slices": 10
+    "horizontal_coverage_percent": 25.0,
+    "vertical_coverage_percent": 10.0,
+    "horizontal_slices": 40,
+    "vertical_slices": 20
   }
 }
 
