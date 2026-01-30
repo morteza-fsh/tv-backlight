@@ -1,50 +1,74 @@
 {
-  "mode": "debug",
-  "input_image": "img.png",
+  "mode": "live",
+  "input_image": "img2.png",
   "output_directory": "output",
   
   "camera": {
     "device": "/dev/video0",
     "width": 1640,
     "height": 1232,
-    "fps": 41,
     "sensor_mode": -1,
-    "autofocus_mode": "manual",
-    "lens_position": 5.0,
-    "awb_mode": "daylight",
     "enable_scaling": true,
     "scaled_width": 820,
-    "scaled_height": 616
+    "scaled_height": 616,
+    "fps": 41,
+    "autofocus_mode": "manual",
+    "lens_position": 664.0,
+    "awb_mode": "custom",
+    "awb_gain_red": 1.5456334352493286,
+    "awb_gain_blue": 1.5098679065704346,
+    "awb_temperature": 5264.0,
+    "analogue_gain": 6.564102649688721,
+    "digital_gain": 1.0207030773162842,
+    "exposure_time": 33251,
+    "color_correction_matrix": [
+      2.2541825771331787,
+      -0.7994374632835388,
+      -0.4547450542449951,
+      -0.6689324975013733,
+      2.673513650894165,
+      -1.004586100578308,
+      -0.2698446810245514,
+      -0.6262826919555664,
+      1.8961273431777954
+    ]
   },
   
   "hyperhdr": {
-    "enabled": true,
+    "enabled": false,
     "host": "127.0.0.1",
     "port": 19400,
-    "priority": 100
+    "priority": 100,
+    "use_linear_format": true
+  },
+  
+  "usb": {
+    "enabled": true,
+    "device": "/dev/ttyUSB0",
+    "baudrate": 921600
   },
   
   "led_layout": {
-    "format": "grid",
+    "format": "hyperhdr",
     "grid": {
-      "rows": 5,
-      "cols": 8
+      "rows": 41,
+      "cols": 73
     },
     "hyperhdr": {
-      "top": 20,
-      "bottom": 20,
-      "left": 10,
-      "right": 10
+      "top": 69,
+      "bottom": 69,
+      "left": 39,
+      "right": 39
     }
   },
   
   "bezier_curves": {
-    "left_bezier": "M0.541992 114.618C41.042 81.6184 126.042 28.6184 191.542 3.61841",
-    "bottom_bezier": "M0.541992 115.118C98.542 223.118 421.542 342.118 684.042 115.118",
-    "right_bezier": "M488.542 3.61841C571.542 32.6184 635.542 70.1184 684.542 114.618",
-    "top_bezier": "M191.542 3.61847C270.542 -1.38159 376.042 1.11842 488.542 3.61837"
+    "left_bezier": "M182.591 246.026C72.0911 198.026 15.0911 143.026 1.09106 128.526",
+    "bottom_bezier": "M182.091 245.526C285.591 255.026 369.591 256.026 487.591 250.026",
+    "right_bezier": "M674.592 133.026C650.091 159.526 570.591 216.026 487.091 250.026",
+    "top_bezier": "M0.591064 129.026C68.0911 36.5259 415.091 -108.474 675.091 133.526"
   },
-  
+
   "bezier_settings": {
     "use_direct_bezier_curves": true,
     "bezier_samples": 50,
@@ -53,15 +77,10 @@
   
   "scaling": {
     "scale_factor": 1,
-    "offset_x": -20,
-    "offset_y": -72,
-    "flip_horizontal": false,
-    "flip_vertical": false
-  },
-  
-  "grid": {
-    "rows": 5,
-    "cols": 8
+    "offset_x": -14,
+    "offset_y": -52,
+    "flip_horizontal": true,
+    "flip_vertical": true
   },
   
   "visualization": {
@@ -77,17 +96,19 @@
     "border_thickness": 1
   },
   
-  "color_extraction": {
-    "mode": "edge_slices",
-    "horizontal_coverage_percent": 20.0,
-    "vertical_coverage_percent": 15.0,
-    "horizontal_slices": 10,
-    "vertical_slices": 8
-  },
-  
   "performance": {
-    "target_fps": 0,
+    "target_fps": 60,
     "enable_parallel_processing": true,
     "parallel_chunk_size": 4
+  },
+  
+  "color_extraction": {
+    "mode": "edge_slices",
+    "method": "dominant",
+    "horizontal_coverage_percent": 30.0,
+    "vertical_coverage_percent": 25.0,
+    "horizontal_slices": 20,
+    "vertical_slices": 10
   }
 }
+
