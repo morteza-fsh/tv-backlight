@@ -15,8 +15,8 @@ struct CornerGamma {
     std::vector<uchar> lut_blue;
 };
 
-// Structure to hold LED layout information
-struct LEDLayout {
+// Structure to hold LED count information for edges
+struct LEDCounts {
     int top = 0;
     int bottom = 0;
     int left = 0;
@@ -95,12 +95,12 @@ public:
         buildAllGammaLUTs();
     }
     
-    // Set LED layout for edge-based gamma calculation
+    // Set LED layout for corner-based gamma calculation
     void setLEDLayout(int top, int bottom, int left, int right) {
-        led_layout_.top = top;
-        led_layout_.bottom = bottom;
-        led_layout_.left = left;
-        led_layout_.right = right;
+        led_counts_.top = top;
+        led_counts_.bottom = bottom;
+        led_counts_.left = left;
+        led_counts_.right = right;
     }
     
     void enableGammaCorrection(bool enabled) { gamma_enabled_ = enabled; }
@@ -152,7 +152,7 @@ private:
     
     // Gamma correction settings
     bool gamma_enabled_;
-    LEDLayout led_layout_;
+    LEDCounts led_counts_;
     
     // Corner-specific gamma settings with LUTs
     CornerGamma corner_gamma_top_left_;

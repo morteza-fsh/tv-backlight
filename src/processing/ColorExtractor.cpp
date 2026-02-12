@@ -497,7 +497,7 @@ ColorExtractor::BlendedGamma ColorExtractor::calculateBlendedGamma(int led_index
     BlendedGamma result;
     
     // If led_index is invalid or layout not set, use top-left corner gamma as default
-    if (led_index < 0 || led_layout_.getTotalLEDs() == 0) {
+    if (led_index < 0 || led_counts_.getTotalLEDs() == 0) {
         result.red = corner_gamma_top_left_.gamma_red;
         result.green = corner_gamma_top_left_.gamma_green;
         result.blue = corner_gamma_top_left_.gamma_blue;
@@ -513,36 +513,36 @@ ColorExtractor::BlendedGamma ColorExtractor::calculateBlendedGamma(int led_index
     int current_idx = 0;
     
     // Left edge: indices [0, left)
-    if (led_index < led_layout_.left) {
+    if (led_index < led_counts_.left) {
         int pos_on_edge = led_index;
-        dist_tl = led_layout_.left - 1 - pos_on_edge;  // Distance to top-left corner
+        dist_tl = led_counts_.left - 1 - pos_on_edge;  // Distance to top-left corner
         dist_bl = pos_on_edge;  // Distance to bottom-left corner
-        dist_tr = led_layout_.left + led_layout_.top - 1 - pos_on_edge;  // Far
-        dist_br = pos_on_edge + led_layout_.bottom;  // Far
+        dist_tr = led_counts_.left + led_counts_.top - 1 - pos_on_edge;  // Far
+        dist_br = pos_on_edge + led_counts_.bottom;  // Far
     }
     // Top edge: indices [left, left+top)
-    else if (led_index < led_layout_.left + led_layout_.top) {
-        int pos_on_edge = led_index - led_layout_.left;
+    else if (led_index < led_counts_.left + led_counts_.top) {
+        int pos_on_edge = led_index - led_counts_.left;
         dist_tl = pos_on_edge;  // Distance to top-left corner
-        dist_tr = led_layout_.top - 1 - pos_on_edge;  // Distance to top-right corner
-        dist_bl = pos_on_edge + led_layout_.left;  // Far
-        dist_br = led_layout_.top - 1 - pos_on_edge + led_layout_.right;  // Far
+        dist_tr = led_counts_.top - 1 - pos_on_edge;  // Distance to top-right corner
+        dist_bl = pos_on_edge + led_counts_.left;  // Far
+        dist_br = led_counts_.top - 1 - pos_on_edge + led_counts_.right;  // Far
     }
     // Right edge: indices [left+top, left+top+right)
-    else if (led_index < led_layout_.left + led_layout_.top + led_layout_.right) {
-        int pos_on_edge = led_index - led_layout_.left - led_layout_.top;
+    else if (led_index < led_counts_.left + led_counts_.top + led_counts_.right) {
+        int pos_on_edge = led_index - led_counts_.left - led_counts_.top;
         dist_tr = pos_on_edge;  // Distance to top-right corner
-        dist_br = led_layout_.right - 1 - pos_on_edge;  // Distance to bottom-right corner
-        dist_tl = pos_on_edge + led_layout_.top;  // Far
-        dist_bl = led_layout_.right - 1 - pos_on_edge + led_layout_.bottom;  // Far
+        dist_br = led_counts_.right - 1 - pos_on_edge;  // Distance to bottom-right corner
+        dist_tl = pos_on_edge + led_counts_.top;  // Far
+        dist_bl = led_counts_.right - 1 - pos_on_edge + led_counts_.bottom;  // Far
     }
     // Bottom edge: indices [left+top+right, left+top+right+bottom)
     else {
-        int pos_on_edge = led_index - led_layout_.left - led_layout_.top - led_layout_.right;
+        int pos_on_edge = led_index - led_counts_.left - led_counts_.top - led_counts_.right;
         dist_br = pos_on_edge;  // Distance to bottom-right corner
-        dist_bl = led_layout_.bottom - 1 - pos_on_edge;  // Distance to bottom-left corner
-        dist_tr = pos_on_edge + led_layout_.right;  // Far
-        dist_tl = led_layout_.bottom - 1 - pos_on_edge + led_layout_.left;  // Far
+        dist_bl = led_counts_.bottom - 1 - pos_on_edge;  // Distance to bottom-left corner
+        dist_tr = pos_on_edge + led_counts_.right;  // Far
+        dist_tl = led_counts_.bottom - 1 - pos_on_edge + led_counts_.left;  // Far
     }
     
     // Calculate weights using inverse distance weighting
