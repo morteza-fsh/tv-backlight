@@ -187,10 +187,54 @@ bool Config::loadFromFile(const std::string& filename) {
             auto gc = j["gamma_correction"];
             gamma_correction.enabled = gc.value("enabled", true);
             
-            // Check if using new corner-based gamma format
-            if (gc.contains("top_left") && gc.contains("top_right") && 
-                gc.contains("bottom_left") && gc.contains("bottom_right")) {
-                // New corner-based format
+            // Check if using 8-point gamma format (4 corners + 4 edge centers)
+            if (gc.contains("top_center") && gc.contains("right_center") && 
+                gc.contains("bottom_center") && gc.contains("left_center")) {
+                // New 8-point format
+                auto tl = gc["top_left"];
+                gamma_correction.top_left.gamma_red = tl.value("gamma_red", 2.2);
+                gamma_correction.top_left.gamma_green = tl.value("gamma_green", 2.2);
+                gamma_correction.top_left.gamma_blue = tl.value("gamma_blue", 2.2);
+                
+                auto tc = gc["top_center"];
+                gamma_correction.top_center.gamma_red = tc.value("gamma_red", 2.2);
+                gamma_correction.top_center.gamma_green = tc.value("gamma_green", 2.2);
+                gamma_correction.top_center.gamma_blue = tc.value("gamma_blue", 2.2);
+                
+                auto tr = gc["top_right"];
+                gamma_correction.top_right.gamma_red = tr.value("gamma_red", 2.2);
+                gamma_correction.top_right.gamma_green = tr.value("gamma_green", 2.2);
+                gamma_correction.top_right.gamma_blue = tr.value("gamma_blue", 2.2);
+                
+                auto rc = gc["right_center"];
+                gamma_correction.right_center.gamma_red = rc.value("gamma_red", 2.2);
+                gamma_correction.right_center.gamma_green = rc.value("gamma_green", 2.2);
+                gamma_correction.right_center.gamma_blue = rc.value("gamma_blue", 2.2);
+                
+                auto br = gc["bottom_right"];
+                gamma_correction.bottom_right.gamma_red = br.value("gamma_red", 2.2);
+                gamma_correction.bottom_right.gamma_green = br.value("gamma_green", 2.2);
+                gamma_correction.bottom_right.gamma_blue = br.value("gamma_blue", 2.2);
+                
+                auto bc = gc["bottom_center"];
+                gamma_correction.bottom_center.gamma_red = bc.value("gamma_red", 2.2);
+                gamma_correction.bottom_center.gamma_green = bc.value("gamma_green", 2.2);
+                gamma_correction.bottom_center.gamma_blue = bc.value("gamma_blue", 2.2);
+                
+                auto bl = gc["bottom_left"];
+                gamma_correction.bottom_left.gamma_red = bl.value("gamma_red", 2.2);
+                gamma_correction.bottom_left.gamma_green = bl.value("gamma_green", 2.2);
+                gamma_correction.bottom_left.gamma_blue = bl.value("gamma_blue", 2.2);
+                
+                auto lc = gc["left_center"];
+                gamma_correction.left_center.gamma_red = lc.value("gamma_red", 2.2);
+                gamma_correction.left_center.gamma_green = lc.value("gamma_green", 2.2);
+                gamma_correction.left_center.gamma_blue = lc.value("gamma_blue", 2.2);
+            }
+            // Check if using 4-corner format
+            else if (gc.contains("top_left") && gc.contains("top_right") && 
+                     gc.contains("bottom_left") && gc.contains("bottom_right")) {
+                // 4-corner format - calculate edge centers as averages
                 auto tl = gc["top_left"];
                 gamma_correction.top_left.gamma_red = tl.value("gamma_red", 2.2);
                 gamma_correction.top_left.gamma_green = tl.value("gamma_green", 2.2);
@@ -210,8 +254,25 @@ bool Config::loadFromFile(const std::string& filename) {
                 gamma_correction.bottom_right.gamma_red = br.value("gamma_red", 2.2);
                 gamma_correction.bottom_right.gamma_green = br.value("gamma_green", 2.2);
                 gamma_correction.bottom_right.gamma_blue = br.value("gamma_blue", 2.2);
+                
+                // Calculate edge centers as average of adjacent corners
+                gamma_correction.top_center.gamma_red = (gamma_correction.top_left.gamma_red + gamma_correction.top_right.gamma_red) / 2.0;
+                gamma_correction.top_center.gamma_green = (gamma_correction.top_left.gamma_green + gamma_correction.top_right.gamma_green) / 2.0;
+                gamma_correction.top_center.gamma_blue = (gamma_correction.top_left.gamma_blue + gamma_correction.top_right.gamma_blue) / 2.0;
+                
+                gamma_correction.right_center.gamma_red = (gamma_correction.top_right.gamma_red + gamma_correction.bottom_right.gamma_red) / 2.0;
+                gamma_correction.right_center.gamma_green = (gamma_correction.top_right.gamma_green + gamma_correction.bottom_right.gamma_green) / 2.0;
+                gamma_correction.right_center.gamma_blue = (gamma_correction.top_right.gamma_blue + gamma_correction.bottom_right.gamma_blue) / 2.0;
+                
+                gamma_correction.bottom_center.gamma_red = (gamma_correction.bottom_right.gamma_red + gamma_correction.bottom_left.gamma_red) / 2.0;
+                gamma_correction.bottom_center.gamma_green = (gamma_correction.bottom_right.gamma_green + gamma_correction.bottom_left.gamma_green) / 2.0;
+                gamma_correction.bottom_center.gamma_blue = (gamma_correction.bottom_right.gamma_blue + gamma_correction.bottom_left.gamma_blue) / 2.0;
+                
+                gamma_correction.left_center.gamma_red = (gamma_correction.bottom_left.gamma_red + gamma_correction.top_left.gamma_red) / 2.0;
+                gamma_correction.left_center.gamma_green = (gamma_correction.bottom_left.gamma_green + gamma_correction.top_left.gamma_green) / 2.0;
+                gamma_correction.left_center.gamma_blue = (gamma_correction.bottom_left.gamma_blue + gamma_correction.top_left.gamma_blue) / 2.0;
             } else {
-                // Legacy format - apply same gamma to all corners
+                // Legacy format - apply same gamma to all points
                 double gamma_r = gc.value("gamma_red", 2.2);
                 double gamma_g = gc.value("gamma_green", 2.2);
                 double gamma_b = gc.value("gamma_blue", 2.2);
@@ -220,9 +281,13 @@ bool Config::loadFromFile(const std::string& filename) {
                 gamma_correction.top_left.gamma_green = gamma_g;
                 gamma_correction.top_left.gamma_blue = gamma_b;
                 
+                gamma_correction.top_center = gamma_correction.top_left;
                 gamma_correction.top_right = gamma_correction.top_left;
-                gamma_correction.bottom_left = gamma_correction.top_left;
+                gamma_correction.right_center = gamma_correction.top_left;
                 gamma_correction.bottom_right = gamma_correction.top_left;
+                gamma_correction.bottom_center = gamma_correction.top_left;
+                gamma_correction.bottom_left = gamma_correction.top_left;
+                gamma_correction.left_center = gamma_correction.top_left;
             }
         }
         
@@ -324,15 +389,27 @@ bool Config::saveToFile(const std::string& filename) const {
         j["gamma_correction"]["top_left"]["gamma_red"] = gamma_correction.top_left.gamma_red;
         j["gamma_correction"]["top_left"]["gamma_green"] = gamma_correction.top_left.gamma_green;
         j["gamma_correction"]["top_left"]["gamma_blue"] = gamma_correction.top_left.gamma_blue;
+        j["gamma_correction"]["top_center"]["gamma_red"] = gamma_correction.top_center.gamma_red;
+        j["gamma_correction"]["top_center"]["gamma_green"] = gamma_correction.top_center.gamma_green;
+        j["gamma_correction"]["top_center"]["gamma_blue"] = gamma_correction.top_center.gamma_blue;
         j["gamma_correction"]["top_right"]["gamma_red"] = gamma_correction.top_right.gamma_red;
         j["gamma_correction"]["top_right"]["gamma_green"] = gamma_correction.top_right.gamma_green;
         j["gamma_correction"]["top_right"]["gamma_blue"] = gamma_correction.top_right.gamma_blue;
-        j["gamma_correction"]["bottom_left"]["gamma_red"] = gamma_correction.bottom_left.gamma_red;
-        j["gamma_correction"]["bottom_left"]["gamma_green"] = gamma_correction.bottom_left.gamma_green;
-        j["gamma_correction"]["bottom_left"]["gamma_blue"] = gamma_correction.bottom_left.gamma_blue;
+        j["gamma_correction"]["right_center"]["gamma_red"] = gamma_correction.right_center.gamma_red;
+        j["gamma_correction"]["right_center"]["gamma_green"] = gamma_correction.right_center.gamma_green;
+        j["gamma_correction"]["right_center"]["gamma_blue"] = gamma_correction.right_center.gamma_blue;
         j["gamma_correction"]["bottom_right"]["gamma_red"] = gamma_correction.bottom_right.gamma_red;
         j["gamma_correction"]["bottom_right"]["gamma_green"] = gamma_correction.bottom_right.gamma_green;
         j["gamma_correction"]["bottom_right"]["gamma_blue"] = gamma_correction.bottom_right.gamma_blue;
+        j["gamma_correction"]["bottom_center"]["gamma_red"] = gamma_correction.bottom_center.gamma_red;
+        j["gamma_correction"]["bottom_center"]["gamma_green"] = gamma_correction.bottom_center.gamma_green;
+        j["gamma_correction"]["bottom_center"]["gamma_blue"] = gamma_correction.bottom_center.gamma_blue;
+        j["gamma_correction"]["bottom_left"]["gamma_red"] = gamma_correction.bottom_left.gamma_red;
+        j["gamma_correction"]["bottom_left"]["gamma_green"] = gamma_correction.bottom_left.gamma_green;
+        j["gamma_correction"]["bottom_left"]["gamma_blue"] = gamma_correction.bottom_left.gamma_blue;
+        j["gamma_correction"]["left_center"]["gamma_red"] = gamma_correction.left_center.gamma_red;
+        j["gamma_correction"]["left_center"]["gamma_green"] = gamma_correction.left_center.gamma_green;
+        j["gamma_correction"]["left_center"]["gamma_blue"] = gamma_correction.left_center.gamma_blue;
         
         std::ofstream file(filename);
         if (!file.is_open()) {

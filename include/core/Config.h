@@ -115,10 +115,16 @@ struct CornerGammaValues {
 
 struct GammaCorrectionConfig {
     bool enabled = true;
+    // 4 corners
     CornerGammaValues top_left;
     CornerGammaValues top_right;
     CornerGammaValues bottom_left;
     CornerGammaValues bottom_right;
+    // 4 edge centers
+    CornerGammaValues top_center;
+    CornerGammaValues right_center;
+    CornerGammaValues bottom_center;
+    CornerGammaValues left_center;
 };
 
 class Config {

@@ -463,11 +463,15 @@ cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
 
 void ColorExtractor::buildAllGammaLUTs() {
     buildGammaLUT(corner_gamma_top_left_);
+    buildGammaLUT(corner_gamma_top_center_);
     buildGammaLUT(corner_gamma_top_right_);
-    buildGammaLUT(corner_gamma_bottom_left_);
+    buildGammaLUT(corner_gamma_right_center_);
     buildGammaLUT(corner_gamma_bottom_right_);
+    buildGammaLUT(corner_gamma_bottom_center_);
+    buildGammaLUT(corner_gamma_bottom_left_);
+    buildGammaLUT(corner_gamma_left_center_);
     
-    LOG_DEBUG("All corner gamma correction LUTs built");
+    LOG_DEBUG("All 8-point gamma correction LUTs built");
 }
 
 void ColorExtractor::buildGammaLUT(CornerGamma& corner_gamma) {
@@ -507,75 +511,128 @@ ColorExtractor::BlendedGamma ColorExtractor::calculateBlendedGamma(int led_index
     // LED layout: [left_leds] -> [top_leds] -> [right_leds] -> [bottom_leds]
     // Starting from bottom-left corner, going counter-clockwise
     
-    // Calculate distance from each of the 4 corners
-    double dist_tl, dist_tr, dist_bl, dist_br;
-    
-    int current_idx = 0;
+    // Calculate distance from each of the 8 control points:
+    // 4 corners: TL, TR, BR, BL
+    // 4 edge centers: TC (top center), RC (right center), BC (bottom center), LC (left center)
+    double dist_tl, dist_tc, dist_tr, dist_rc, dist_br, dist_bc, dist_bl, dist_lc;
     
     // Left edge: indices [0, left)
     if (led_index < led_counts_.left) {
         int pos_on_edge = led_index;
+        int mid_left = led_counts_.left / 2;
+        
         dist_tl = led_counts_.left - 1 - pos_on_edge;  // Distance to top-left corner
         dist_bl = pos_on_edge;  // Distance to bottom-left corner
-        dist_tr = led_counts_.left + led_counts_.top - 1 - pos_on_edge;  // Far
-        dist_br = pos_on_edge + led_counts_.bottom;  // Far
+        dist_lc = std::abs(pos_on_edge - mid_left);  // Distance to left center
+        
+        // Far points
+        dist_tc = led_counts_.left + led_counts_.top / 2 - pos_on_edge;
+        dist_tr = led_counts_.left + led_counts_.top - 1 - pos_on_edge;
+        dist_rc = led_counts_.left + led_counts_.top + led_counts_.right / 2;
+        dist_br = pos_on_edge + led_counts_.bottom + led_counts_.right;
+        dist_bc = pos_on_edge + led_counts_.bottom / 2;
     }
     // Top edge: indices [left, left+top)
     else if (led_index < led_counts_.left + led_counts_.top) {
         int pos_on_edge = led_index - led_counts_.left;
+        int mid_top = led_counts_.top / 2;
+        
         dist_tl = pos_on_edge;  // Distance to top-left corner
         dist_tr = led_counts_.top - 1 - pos_on_edge;  // Distance to top-right corner
-        dist_bl = pos_on_edge + led_counts_.left;  // Far
-        dist_br = led_counts_.top - 1 - pos_on_edge + led_counts_.right;  // Far
+        dist_tc = std::abs(pos_on_edge - mid_top);  // Distance to top center
+        
+        // Far points
+        dist_lc = pos_on_edge + led_counts_.left / 2;
+        dist_bl = pos_on_edge + led_counts_.left;
+        dist_bc = pos_on_edge + led_counts_.left + led_counts_.bottom / 2;
+        dist_br = led_counts_.top - 1 - pos_on_edge + led_counts_.right;
+        dist_rc = led_counts_.top - 1 - pos_on_edge + led_counts_.right / 2;
     }
     // Right edge: indices [left+top, left+top+right)
     else if (led_index < led_counts_.left + led_counts_.top + led_counts_.right) {
         int pos_on_edge = led_index - led_counts_.left - led_counts_.top;
+        int mid_right = led_counts_.right / 2;
+        
         dist_tr = pos_on_edge;  // Distance to top-right corner
         dist_br = led_counts_.right - 1 - pos_on_edge;  // Distance to bottom-right corner
-        dist_tl = pos_on_edge + led_counts_.top;  // Far
-        dist_bl = led_counts_.right - 1 - pos_on_edge + led_counts_.bottom;  // Far
+        dist_rc = std::abs(pos_on_edge - mid_right);  // Distance to right center
+        
+        // Far points
+        dist_tc = pos_on_edge + led_counts_.top / 2;
+        dist_tl = pos_on_edge + led_counts_.top;
+        dist_lc = pos_on_edge + led_counts_.top + led_counts_.left / 2;
+        dist_bl = led_counts_.right - 1 - pos_on_edge + led_counts_.bottom + led_counts_.left;
+        dist_bc = led_counts_.right - 1 - pos_on_edge + led_counts_.bottom / 2;
     }
     // Bottom edge: indices [left+top+right, left+top+right+bottom)
     else {
         int pos_on_edge = led_index - led_counts_.left - led_counts_.top - led_counts_.right;
+        int mid_bottom = led_counts_.bottom / 2;
+        
         dist_br = pos_on_edge;  // Distance to bottom-right corner
         dist_bl = led_counts_.bottom - 1 - pos_on_edge;  // Distance to bottom-left corner
-        dist_tr = pos_on_edge + led_counts_.right;  // Far
-        dist_tl = led_counts_.bottom - 1 - pos_on_edge + led_counts_.left;  // Far
+        dist_bc = std::abs(pos_on_edge - mid_bottom);  // Distance to bottom center
+        
+        // Far points
+        dist_rc = pos_on_edge + led_counts_.right / 2;
+        dist_tr = pos_on_edge + led_counts_.right;
+        dist_tc = pos_on_edge + led_counts_.right + led_counts_.top / 2;
+        dist_tl = led_counts_.bottom - 1 - pos_on_edge + led_counts_.left;
+        dist_lc = led_counts_.bottom - 1 - pos_on_edge + led_counts_.left / 2;
     }
     
     // Calculate weights using inverse distance weighting
     // Add small epsilon to avoid division by zero
     const double epsilon = 1.0;
     double weight_tl = 1.0 / (dist_tl + epsilon);
+    double weight_tc = 1.0 / (dist_tc + epsilon);
     double weight_tr = 1.0 / (dist_tr + epsilon);
-    double weight_bl = 1.0 / (dist_bl + epsilon);
+    double weight_rc = 1.0 / (dist_rc + epsilon);
     double weight_br = 1.0 / (dist_br + epsilon);
+    double weight_bc = 1.0 / (dist_bc + epsilon);
+    double weight_bl = 1.0 / (dist_bl + epsilon);
+    double weight_lc = 1.0 / (dist_lc + epsilon);
     
-    double total_weight = weight_tl + weight_tr + weight_bl + weight_br;
+    double total_weight = weight_tl + weight_tc + weight_tr + weight_rc + 
+                         weight_br + weight_bc + weight_bl + weight_lc;
     
     // Normalize weights
     weight_tl /= total_weight;
+    weight_tc /= total_weight;
     weight_tr /= total_weight;
-    weight_bl /= total_weight;
+    weight_rc /= total_weight;
     weight_br /= total_weight;
+    weight_bc /= total_weight;
+    weight_bl /= total_weight;
+    weight_lc /= total_weight;
     
-    // Blend gamma values from all 4 corners
+    // Blend gamma values from all 8 control points
     result.red = weight_tl * corner_gamma_top_left_.gamma_red +
+                 weight_tc * corner_gamma_top_center_.gamma_red +
                  weight_tr * corner_gamma_top_right_.gamma_red +
+                 weight_rc * corner_gamma_right_center_.gamma_red +
+                 weight_br * corner_gamma_bottom_right_.gamma_red +
+                 weight_bc * corner_gamma_bottom_center_.gamma_red +
                  weight_bl * corner_gamma_bottom_left_.gamma_red +
-                 weight_br * corner_gamma_bottom_right_.gamma_red;
+                 weight_lc * corner_gamma_left_center_.gamma_red;
     
     result.green = weight_tl * corner_gamma_top_left_.gamma_green +
+                   weight_tc * corner_gamma_top_center_.gamma_green +
                    weight_tr * corner_gamma_top_right_.gamma_green +
+                   weight_rc * corner_gamma_right_center_.gamma_green +
+                   weight_br * corner_gamma_bottom_right_.gamma_green +
+                   weight_bc * corner_gamma_bottom_center_.gamma_green +
                    weight_bl * corner_gamma_bottom_left_.gamma_green +
-                   weight_br * corner_gamma_bottom_right_.gamma_green;
+                   weight_lc * corner_gamma_left_center_.gamma_green;
     
     result.blue = weight_tl * corner_gamma_top_left_.gamma_blue +
+                  weight_tc * corner_gamma_top_center_.gamma_blue +
                   weight_tr * corner_gamma_top_right_.gamma_blue +
+                  weight_rc * corner_gamma_right_center_.gamma_blue +
+                  weight_br * corner_gamma_bottom_right_.gamma_blue +
+                  weight_bc * corner_gamma_bottom_center_.gamma_blue +
                   weight_bl * corner_gamma_bottom_left_.gamma_blue +
-                  weight_br * corner_gamma_bottom_right_.gamma_blue;
+                  weight_lc * corner_gamma_left_center_.gamma_blue;
     
     return result;
 }

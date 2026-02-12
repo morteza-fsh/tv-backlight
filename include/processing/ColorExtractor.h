@@ -33,7 +33,9 @@ public:
                        gamma_enabled_(false) {
         // Initialize default gamma for backward compatibility
         corner_gamma_top_left_.gamma_red = corner_gamma_top_left_.gamma_green = corner_gamma_top_left_.gamma_blue = 2.2;
-        corner_gamma_top_right_ = corner_gamma_bottom_left_ = corner_gamma_bottom_right_ = corner_gamma_top_left_;
+        corner_gamma_top_center_ = corner_gamma_top_right_ = corner_gamma_right_center_ = 
+        corner_gamma_bottom_right_ = corner_gamma_bottom_center_ = corner_gamma_bottom_left_ = 
+        corner_gamma_left_center_ = corner_gamma_top_left_;
         buildAllGammaLUTs();
     }
     
@@ -61,37 +63,67 @@ public:
     void setMethod(const std::string& method) { method_ = method; }
     std::string getMethod() const { return method_; }
     
-    // Legacy gamma correction (applies to all corners)
+    // Legacy gamma correction (applies to all control points)
     void setGammaCorrection(bool enabled, double gamma_r, double gamma_g, double gamma_b) {
         gamma_enabled_ = enabled;
-        corner_gamma_top_left_.gamma_red = corner_gamma_top_right_.gamma_red = 
-        corner_gamma_bottom_left_.gamma_red = corner_gamma_bottom_right_.gamma_red = gamma_r;
-        corner_gamma_top_left_.gamma_green = corner_gamma_top_right_.gamma_green = 
-        corner_gamma_bottom_left_.gamma_green = corner_gamma_bottom_right_.gamma_green = gamma_g;
-        corner_gamma_top_left_.gamma_blue = corner_gamma_top_right_.gamma_blue = 
-        corner_gamma_bottom_left_.gamma_blue = corner_gamma_bottom_right_.gamma_blue = gamma_b;
+        corner_gamma_top_left_.gamma_red = corner_gamma_top_center_.gamma_red = corner_gamma_top_right_.gamma_red = 
+        corner_gamma_right_center_.gamma_red = corner_gamma_bottom_right_.gamma_red = corner_gamma_bottom_center_.gamma_red =
+        corner_gamma_bottom_left_.gamma_red = corner_gamma_left_center_.gamma_red = gamma_r;
+        
+        corner_gamma_top_left_.gamma_green = corner_gamma_top_center_.gamma_green = corner_gamma_top_right_.gamma_green = 
+        corner_gamma_right_center_.gamma_green = corner_gamma_bottom_right_.gamma_green = corner_gamma_bottom_center_.gamma_green =
+        corner_gamma_bottom_left_.gamma_green = corner_gamma_left_center_.gamma_green = gamma_g;
+        
+        corner_gamma_top_left_.gamma_blue = corner_gamma_top_center_.gamma_blue = corner_gamma_top_right_.gamma_blue = 
+        corner_gamma_right_center_.gamma_blue = corner_gamma_bottom_right_.gamma_blue = corner_gamma_bottom_center_.gamma_blue =
+        corner_gamma_bottom_left_.gamma_blue = corner_gamma_left_center_.gamma_blue = gamma_b;
+        
         buildAllGammaLUTs();
     }
     
-    // Corner-specific gamma correction
-    void setCornerGammaCorrection(bool enabled,
-                                 double tl_r, double tl_g, double tl_b,
-                                 double tr_r, double tr_g, double tr_b,
-                                 double bl_r, double bl_g, double bl_b,
-                                 double br_r, double br_g, double br_b) {
+    // 8-point gamma correction (4 corners + 4 edge centers)
+    void setEightPointGammaCorrection(bool enabled,
+                                     double tl_r, double tl_g, double tl_b,
+                                     double tc_r, double tc_g, double tc_b,
+                                     double tr_r, double tr_g, double tr_b,
+                                     double rc_r, double rc_g, double rc_b,
+                                     double br_r, double br_g, double br_b,
+                                     double bc_r, double bc_g, double bc_b,
+                                     double bl_r, double bl_g, double bl_b,
+                                     double lc_r, double lc_g, double lc_b) {
         gamma_enabled_ = enabled;
         corner_gamma_top_left_.gamma_red = tl_r;
         corner_gamma_top_left_.gamma_green = tl_g;
         corner_gamma_top_left_.gamma_blue = tl_b;
+        
+        corner_gamma_top_center_.gamma_red = tc_r;
+        corner_gamma_top_center_.gamma_green = tc_g;
+        corner_gamma_top_center_.gamma_blue = tc_b;
+        
         corner_gamma_top_right_.gamma_red = tr_r;
         corner_gamma_top_right_.gamma_green = tr_g;
         corner_gamma_top_right_.gamma_blue = tr_b;
-        corner_gamma_bottom_left_.gamma_red = bl_r;
-        corner_gamma_bottom_left_.gamma_green = bl_g;
-        corner_gamma_bottom_left_.gamma_blue = bl_b;
+        
+        corner_gamma_right_center_.gamma_red = rc_r;
+        corner_gamma_right_center_.gamma_green = rc_g;
+        corner_gamma_right_center_.gamma_blue = rc_b;
+        
         corner_gamma_bottom_right_.gamma_red = br_r;
         corner_gamma_bottom_right_.gamma_green = br_g;
         corner_gamma_bottom_right_.gamma_blue = br_b;
+        
+        corner_gamma_bottom_center_.gamma_red = bc_r;
+        corner_gamma_bottom_center_.gamma_green = bc_g;
+        corner_gamma_bottom_center_.gamma_blue = bc_b;
+        
+        corner_gamma_bottom_left_.gamma_red = bl_r;
+        corner_gamma_bottom_left_.gamma_green = bl_g;
+        corner_gamma_bottom_left_.gamma_blue = bl_b;
+        
+        corner_gamma_left_center_.gamma_red = lc_r;
+        corner_gamma_left_center_.gamma_green = lc_g;
+        corner_gamma_left_center_.gamma_blue = lc_b;
+        
         buildAllGammaLUTs();
     }
     
@@ -154,11 +186,15 @@ private:
     bool gamma_enabled_;
     LEDCounts led_counts_;
     
-    // Corner-specific gamma settings with LUTs
+    // 8-point gamma settings with LUTs (4 corners + 4 edge centers)
     CornerGamma corner_gamma_top_left_;
+    CornerGamma corner_gamma_top_center_;
     CornerGamma corner_gamma_top_right_;
-    CornerGamma corner_gamma_bottom_left_;
+    CornerGamma corner_gamma_right_center_;
     CornerGamma corner_gamma_bottom_right_;
+    CornerGamma corner_gamma_bottom_center_;
+    CornerGamma corner_gamma_bottom_left_;
+    CornerGamma corner_gamma_left_center_;
 };
 
 } // namespace TVLED
