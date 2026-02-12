@@ -200,16 +200,16 @@ std::vector<cv::Vec3b> ColorExtractor::extractColors(
         if (enable_parallel_) {
             #pragma omp parallel for schedule(dynamic, 4)
             for (int idx = 0; idx < static_cast<int>(polygons.size()); idx++) {
-                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx], idx);
             }
         } else {
             for (size_t idx = 0; idx < polygons.size(); idx++) {
-                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+                colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx], idx);
             }
         }
         #else
         for (size_t idx = 0; idx < polygons.size(); idx++) {
-            colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx]);
+            colors[idx] = extractSingleColorWithMask(frame, cached_masks_[idx], cached_bboxes_[idx], idx);
         }
         #endif
     } else {
@@ -224,16 +224,16 @@ std::vector<cv::Vec3b> ColorExtractor::extractColors(
         if (enable_parallel_) {
             #pragma omp parallel for schedule(dynamic, 4)
             for (int idx = 0; idx < static_cast<int>(polygons.size()); idx++) {
-                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx], idx);
             }
         } else {
             for (size_t idx = 0; idx < polygons.size(); idx++) {
-                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+                colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx], idx);
             }
         }
         #else
         for (size_t idx = 0; idx < polygons.size(); idx++) {
-            colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx]);
+            colors[idx] = extractSingleColor(frame, polygons[idx], bboxes[idx], idx);
         }
         #endif
     }
@@ -250,22 +250,24 @@ std::vector<cv::Vec3b> ColorExtractor::extractColors(
 
 cv::Vec3b ColorExtractor::extractSingleColorWithMask(const cv::Mat& frame,
                                                     const cv::Mat& mask,
-                                                    const cv::Rect& bbox) {
+                                                    const cv::Rect& bbox,
+                                                    int led_index) {
     if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
         return cv::Vec3b(0, 0, 0);
     }
     
     // Route to appropriate extraction method
     if (method_ == "dominant") {
-        return extractDominantColor(frame, mask, bbox);
+        return extractDominantColor(frame, mask, bbox, led_index);
     } else {
-        return extractMeanColor(frame, mask, bbox);
+        return extractMeanColor(frame, mask, bbox, led_index);
     }
 }
 
 cv::Vec3b ColorExtractor::extractMeanColor(const cv::Mat& frame,
                                            const cv::Mat& mask,
-                                           const cv::Rect& bbox) {
+                                           const cv::Rect& bbox,
+                                           int led_index) {
     if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
         return cv::Vec3b(0, 0, 0);
     }
@@ -309,7 +311,7 @@ cv::Vec3b ColorExtractor::extractMeanColor(const cv::Mat& frame,
         cv::Vec3b color(r, g, b);
         
         // Apply gamma correction if enabled
-        return applyGammaCorrection(color);
+        return applyGammaCorrection(color, led_index);
     }
     
     return cv::Vec3b(0, 0, 0);
@@ -317,7 +319,8 @@ cv::Vec3b ColorExtractor::extractMeanColor(const cv::Mat& frame,
 
 cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
                                                const cv::Mat& mask,
-                                               const cv::Rect& bbox) {
+                                               const cv::Rect& bbox,
+                                               int led_index) {
     if (bbox.width <= 0 || bbox.height <= 0 || mask.empty()) {
         return cv::Vec3b(0, 0, 0);
     }
@@ -429,7 +432,7 @@ cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
         cv::Vec3b color(r, g, b);
         
         // Apply gamma correction if enabled
-        return applyGammaCorrection(color);
+        return applyGammaCorrection(color, led_index);
     }
     
     return cv::Vec3b(0, 0, 0);
@@ -437,7 +440,8 @@ cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
 
 cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
                                              const std::vector<cv::Point>& polygon,
-                                             const cv::Rect& bbox) {
+                                             const cv::Rect& bbox,
+                                             int led_index) {
     if (bbox.width <= 0 || bbox.height <= 0) {
         return cv::Vec3b(0, 0, 0);
     }
@@ -454,14 +458,23 @@ cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
     cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{poly_relative}, cv::Scalar(255));
     
     // Use the optimized mask-based extraction
-    return extractSingleColorWithMask(frame, mask, bbox);
+    return extractSingleColorWithMask(frame, mask, bbox, led_index);
 }
 
-void ColorExtractor::buildGammaLUT() {
+void ColorExtractor::buildAllGammaLUTs() {
+    buildGammaLUT(corner_gamma_top_left_);
+    buildGammaLUT(corner_gamma_top_right_);
+    buildGammaLUT(corner_gamma_bottom_left_);
+    buildGammaLUT(corner_gamma_bottom_right_);
+    
+    LOG_DEBUG("All corner gamma correction LUTs built");
+}
+
+void ColorExtractor::buildGammaLUT(CornerGamma& corner_gamma) {
     // Pre-compute gamma correction lookup tables for fast processing
-    gamma_lut_red_.resize(256);
-    gamma_lut_green_.resize(256);
-    gamma_lut_blue_.resize(256);
+    corner_gamma.lut_red.resize(256);
+    corner_gamma.lut_green.resize(256);
+    corner_gamma.lut_blue.resize(256);
     
     for (int i = 0; i < 256; i++) {
         // Normalize to [0, 1] range
@@ -469,33 +482,128 @@ void ColorExtractor::buildGammaLUT() {
         
         // Apply gamma correction: output = input^(1/gamma)
         // This converts from linear light to display gamma
-        double corrected_r = std::pow(normalized, 1.0 / gamma_red_);
-        double corrected_g = std::pow(normalized, 1.0 / gamma_green_);
-        double corrected_b = std::pow(normalized, 1.0 / gamma_blue_);
+        double corrected_r = std::pow(normalized, 1.0 / corner_gamma.gamma_red);
+        double corrected_g = std::pow(normalized, 1.0 / corner_gamma.gamma_green);
+        double corrected_b = std::pow(normalized, 1.0 / corner_gamma.gamma_blue);
         
         // Scale back to [0, 255] and clamp
-        gamma_lut_red_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_r * 255.0 + 0.5)));
-        gamma_lut_green_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_g * 255.0 + 0.5)));
-        gamma_lut_blue_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_b * 255.0 + 0.5)));
+        corner_gamma.lut_red[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_r * 255.0 + 0.5)));
+        corner_gamma.lut_green[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_g * 255.0 + 0.5)));
+        corner_gamma.lut_blue[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_b * 255.0 + 0.5)));
     }
-    
-    LOG_DEBUG("Gamma correction LUT built - R: " + std::to_string(gamma_red_) + 
-              ", G: " + std::to_string(gamma_green_) + 
-              ", B: " + std::to_string(gamma_blue_));
 }
 
-cv::Vec3b ColorExtractor::applyGammaCorrection(const cv::Vec3b& color) const {
+ColorExtractor::BlendedGamma ColorExtractor::calculateBlendedGamma(int led_index) const {
+    BlendedGamma result;
+    
+    // If led_index is invalid or layout not set, use top-left corner gamma as default
+    if (led_index < 0 || led_layout_.getTotalLEDs() == 0) {
+        result.red = corner_gamma_top_left_.gamma_red;
+        result.green = corner_gamma_top_left_.gamma_green;
+        result.blue = corner_gamma_top_left_.gamma_blue;
+        return result;
+    }
+    
+    // LED layout: [left_leds] -> [top_leds] -> [right_leds] -> [bottom_leds]
+    // Starting from bottom-left corner, going counter-clockwise
+    
+    // Calculate distance from each of the 4 corners
+    double dist_tl, dist_tr, dist_bl, dist_br;
+    
+    int current_idx = 0;
+    
+    // Left edge: indices [0, left)
+    if (led_index < led_layout_.left) {
+        int pos_on_edge = led_index;
+        dist_tl = led_layout_.left - 1 - pos_on_edge;  // Distance to top-left corner
+        dist_bl = pos_on_edge;  // Distance to bottom-left corner
+        dist_tr = led_layout_.left + led_layout_.top - 1 - pos_on_edge;  // Far
+        dist_br = pos_on_edge + led_layout_.bottom;  // Far
+    }
+    // Top edge: indices [left, left+top)
+    else if (led_index < led_layout_.left + led_layout_.top) {
+        int pos_on_edge = led_index - led_layout_.left;
+        dist_tl = pos_on_edge;  // Distance to top-left corner
+        dist_tr = led_layout_.top - 1 - pos_on_edge;  // Distance to top-right corner
+        dist_bl = pos_on_edge + led_layout_.left;  // Far
+        dist_br = led_layout_.top - 1 - pos_on_edge + led_layout_.right;  // Far
+    }
+    // Right edge: indices [left+top, left+top+right)
+    else if (led_index < led_layout_.left + led_layout_.top + led_layout_.right) {
+        int pos_on_edge = led_index - led_layout_.left - led_layout_.top;
+        dist_tr = pos_on_edge;  // Distance to top-right corner
+        dist_br = led_layout_.right - 1 - pos_on_edge;  // Distance to bottom-right corner
+        dist_tl = pos_on_edge + led_layout_.top;  // Far
+        dist_bl = led_layout_.right - 1 - pos_on_edge + led_layout_.bottom;  // Far
+    }
+    // Bottom edge: indices [left+top+right, left+top+right+bottom)
+    else {
+        int pos_on_edge = led_index - led_layout_.left - led_layout_.top - led_layout_.right;
+        dist_br = pos_on_edge;  // Distance to bottom-right corner
+        dist_bl = led_layout_.bottom - 1 - pos_on_edge;  // Distance to bottom-left corner
+        dist_tr = pos_on_edge + led_layout_.right;  // Far
+        dist_tl = led_layout_.bottom - 1 - pos_on_edge + led_layout_.left;  // Far
+    }
+    
+    // Calculate weights using inverse distance weighting
+    // Add small epsilon to avoid division by zero
+    const double epsilon = 1.0;
+    double weight_tl = 1.0 / (dist_tl + epsilon);
+    double weight_tr = 1.0 / (dist_tr + epsilon);
+    double weight_bl = 1.0 / (dist_bl + epsilon);
+    double weight_br = 1.0 / (dist_br + epsilon);
+    
+    double total_weight = weight_tl + weight_tr + weight_bl + weight_br;
+    
+    // Normalize weights
+    weight_tl /= total_weight;
+    weight_tr /= total_weight;
+    weight_bl /= total_weight;
+    weight_br /= total_weight;
+    
+    // Blend gamma values from all 4 corners
+    result.red = weight_tl * corner_gamma_top_left_.gamma_red +
+                 weight_tr * corner_gamma_top_right_.gamma_red +
+                 weight_bl * corner_gamma_bottom_left_.gamma_red +
+                 weight_br * corner_gamma_bottom_right_.gamma_red;
+    
+    result.green = weight_tl * corner_gamma_top_left_.gamma_green +
+                   weight_tr * corner_gamma_top_right_.gamma_green +
+                   weight_bl * corner_gamma_bottom_left_.gamma_green +
+                   weight_br * corner_gamma_bottom_right_.gamma_green;
+    
+    result.blue = weight_tl * corner_gamma_top_left_.gamma_blue +
+                  weight_tr * corner_gamma_top_right_.gamma_blue +
+                  weight_bl * corner_gamma_bottom_left_.gamma_blue +
+                  weight_br * corner_gamma_bottom_right_.gamma_blue;
+    
+    return result;
+}
+
+cv::Vec3b ColorExtractor::applyGammaCorrection(const cv::Vec3b& color, int led_index) const {
     if (!gamma_enabled_) {
         return color;
     }
     
-    // Apply gamma correction using pre-computed lookup tables
-    // Input color is in RGB format (r, g, b)
-    return cv::Vec3b(
-        gamma_lut_red_[color[0]],
-        gamma_lut_green_[color[1]],
-        gamma_lut_blue_[color[2]]
-    );
+    // Get blended gamma values for this LED
+    BlendedGamma gamma = calculateBlendedGamma(led_index);
+    
+    // Apply gamma correction using the blended gamma values
+    // We need to compute on-the-fly for blended gammas
+    double normalized_r = color[0] / 255.0;
+    double normalized_g = color[1] / 255.0;
+    double normalized_b = color[2] / 255.0;
+    
+    double corrected_r = std::pow(normalized_r, 1.0 / gamma.red);
+    double corrected_g = std::pow(normalized_g, 1.0 / gamma.green);
+    double corrected_b = std::pow(normalized_b, 1.0 / gamma.blue);
+    
+    // Scale back to [0, 255] and clamp
+    uchar final_r = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_r * 255.0 + 0.5)));
+    uchar final_g = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_g * 255.0 + 0.5)));
+    uchar final_b = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_b * 255.0 + 0.5)));
+    
+    return cv::Vec3b(final_r, final_g, final_b);
 }
 
 } // namespace TVLED

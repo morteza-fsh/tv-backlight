@@ -118,9 +118,26 @@
   
   "gamma_correction": {
     "enabled": true,
-    "gamma_red": 2,
-    "gamma_green": 2,
-    "gamma_blue": 0.6
+    "top_left": {
+      "gamma_red": 2.0,
+      "gamma_green": 2.0,
+      "gamma_blue": 0.6
+    },
+    "top_right": {
+      "gamma_red": 2.0,
+      "gamma_green": 2.0,
+      "gamma_blue": 0.6
+    },
+    "bottom_left": {
+      "gamma_red": 2.0,
+      "gamma_green": 2.0,
+      "gamma_blue": 0.6
+    },
+    "bottom_right": {
+      "gamma_red": 2.0,
+      "gamma_green": 2.0,
+      "gamma_blue": 0.6
+    }
   }
 }
 

@@ -348,20 +348,47 @@ bool LEDController::setupColorExtractor() {
     color_extractor_->setParallelProcessing(config_.performance.enable_parallel_processing);
     color_extractor_->setMethod(config_.color_extraction.method);
     
-    // Configure gamma correction
-    color_extractor_->setGammaCorrection(
+    // Set LED layout for corner-based gamma calculation
+    color_extractor_->setLEDLayout(
+        config_.led_layout.hyperhdr_top,
+        config_.led_layout.hyperhdr_bottom,
+        config_.led_layout.hyperhdr_left,
+        config_.led_layout.hyperhdr_right
+    );
+    
+    // Configure corner-based gamma correction
+    color_extractor_->setCornerGammaCorrection(
         config_.gamma_correction.enabled,
-        config_.gamma_correction.gamma_red,
-        config_.gamma_correction.gamma_green,
-        config_.gamma_correction.gamma_blue
+        config_.gamma_correction.top_left.gamma_red,
+        config_.gamma_correction.top_left.gamma_green,
+        config_.gamma_correction.top_left.gamma_blue,
+        config_.gamma_correction.top_right.gamma_red,
+        config_.gamma_correction.top_right.gamma_green,
+        config_.gamma_correction.top_right.gamma_blue,
+        config_.gamma_correction.bottom_left.gamma_red,
+        config_.gamma_correction.bottom_left.gamma_green,
+        config_.gamma_correction.bottom_left.gamma_blue,
+        config_.gamma_correction.bottom_right.gamma_red,
+        config_.gamma_correction.bottom_right.gamma_green,
+        config_.gamma_correction.bottom_right.gamma_blue
     );
     
     std::stringstream ss;
     ss << "Color extractor ready (method: " << config_.color_extraction.method;
     if (config_.gamma_correction.enabled) {
-        ss << ", gamma correction: R=" << config_.gamma_correction.gamma_red 
-           << " G=" << config_.gamma_correction.gamma_green 
-           << " B=" << config_.gamma_correction.gamma_blue;
+        ss << ", corner-based gamma correction enabled - "
+           << "TL(R=" << config_.gamma_correction.top_left.gamma_red 
+           << " G=" << config_.gamma_correction.top_left.gamma_green 
+           << " B=" << config_.gamma_correction.top_left.gamma_blue << "), "
+           << "TR(R=" << config_.gamma_correction.top_right.gamma_red 
+           << " G=" << config_.gamma_correction.top_right.gamma_green 
+           << " B=" << config_.gamma_correction.top_right.gamma_blue << "), "
+           << "BL(R=" << config_.gamma_correction.bottom_left.gamma_red 
+           << " G=" << config_.gamma_correction.bottom_left.gamma_green 
+           << " B=" << config_.gamma_correction.bottom_left.gamma_blue << "), "
+           << "BR(R=" << config_.gamma_correction.bottom_right.gamma_red 
+           << " G=" << config_.gamma_correction.bottom_right.gamma_green 
+           << " B=" << config_.gamma_correction.bottom_right.gamma_blue << ")";
     } else {
         ss << ", gamma correction: disabled";
     }

@@ -107,11 +107,18 @@ struct ColorExtractionConfig {
     int vertical_slices = 8;     // Number of vertical strips for left/right edges
 };
 
-struct GammaCorrectionConfig {
-    bool enabled = true;
+struct CornerGammaValues {
     double gamma_red = 2.2;
     double gamma_green = 2.2;
     double gamma_blue = 2.2;
+};
+
+struct GammaCorrectionConfig {
+    bool enabled = true;
+    CornerGammaValues top_left;
+    CornerGammaValues top_right;
+    CornerGammaValues bottom_left;
+    CornerGammaValues bottom_right;
 };
 
 class Config {
