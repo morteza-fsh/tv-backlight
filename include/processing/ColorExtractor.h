@@ -7,7 +7,10 @@ namespace TVLED {
 
 class ColorExtractor {
 public:
-    ColorExtractor() : enable_parallel_(true), masks_precomputed_(false), method_("mean") {}
+    ColorExtractor() : enable_parallel_(true), masks_precomputed_(false), method_("mean"),
+                       gamma_enabled_(false), gamma_red_(2.2), gamma_green_(2.2), gamma_blue_(2.2) {
+        buildGammaLUT();
+    }
     
     // Extract colors from regions defined by polygons
     // Returns RGB colors (converted from OpenCV's BGR)
@@ -32,6 +35,18 @@ public:
     // Set color extraction method: "mean" or "dominant"
     void setMethod(const std::string& method) { method_ = method; }
     std::string getMethod() const { return method_; }
+    
+    // Gamma correction settings
+    void setGammaCorrection(bool enabled, double gamma_r, double gamma_g, double gamma_b) {
+        gamma_enabled_ = enabled;
+        gamma_red_ = gamma_r;
+        gamma_green_ = gamma_g;
+        gamma_blue_ = gamma_b;
+        buildGammaLUT();
+    }
+    
+    void enableGammaCorrection(bool enabled) { gamma_enabled_ = enabled; }
+    bool isGammaCorrectionEnabled() const { return gamma_enabled_; }
 
 private:
     // Extract color from a single polygon region

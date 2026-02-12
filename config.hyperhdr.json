@@ -105,8 +105,8 @@
   "color_extraction": {
     "mode": "edge_slices",
     "method": "mean",
-    "horizontal_coverage_percent": 25.0,
-    "vertical_coverage_percent": 10.0,
+    "horizontal_coverage_percent": 5.0,
+    "vertical_coverage_percent": 2.0,
     "horizontal_slices": 40,
     "vertical_slices": 20
   }
