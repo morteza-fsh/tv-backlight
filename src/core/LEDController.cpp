@@ -348,7 +348,26 @@ bool LEDController::setupColorExtractor() {
     color_extractor_->setParallelProcessing(config_.performance.enable_parallel_processing);
     color_extractor_->setMethod(config_.color_extraction.method);
     
-    LOG_INFO("Color extractor ready (method: " + config_.color_extraction.method + ")");
+    // Configure gamma correction
+    color_extractor_->setGammaCorrection(
+        config_.gamma_correction.enabled,
+        config_.gamma_correction.gamma_red,
+        config_.gamma_correction.gamma_green,
+        config_.gamma_correction.gamma_blue
+    );
+    
+    std::stringstream ss;
+    ss << "Color extractor ready (method: " << config_.color_extraction.method;
+    if (config_.gamma_correction.enabled) {
+        ss << ", gamma correction: R=" << config_.gamma_correction.gamma_red 
+           << " G=" << config_.gamma_correction.gamma_green 
+           << " B=" << config_.gamma_correction.gamma_blue;
+    } else {
+        ss << ", gamma correction: disabled";
+    }
+    ss << ")";
+    LOG_INFO(ss.str());
+    
     return true;
 }
 

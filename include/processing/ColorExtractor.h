@@ -69,11 +69,26 @@ private:
                                    const cv::Mat& mask,
                                    const cv::Rect& bbox);
     
+    // Gamma correction utilities
+    void buildGammaLUT();
+    cv::Vec3b applyGammaCorrection(const cv::Vec3b& color) const;
+    
     bool enable_parallel_;
     bool masks_precomputed_;
     std::string method_;  // "mean" or "dominant"
     std::vector<cv::Mat> cached_masks_;
     std::vector<cv::Rect> cached_bboxes_;
+    
+    // Gamma correction settings
+    bool gamma_enabled_;
+    double gamma_red_;
+    double gamma_green_;
+    double gamma_blue_;
+    
+    // Look-up tables for fast gamma correction (256 values for each channel)
+    std::vector<uchar> gamma_lut_red_;
+    std::vector<uchar> gamma_lut_green_;
+    std::vector<uchar> gamma_lut_blue_;
 };
 
 } // namespace TVLED

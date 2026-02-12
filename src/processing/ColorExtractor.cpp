@@ -2,6 +2,7 @@
 #include "utils/Logger.h"
 #include "utils/PerformanceTimer.h"
 #include <algorithm>
+#include <cmath>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -301,11 +302,14 @@ cv::Vec3b ColorExtractor::extractMeanColor(const cv::Mat& frame,
 #endif
     
     if (pixel_count > 0) {
-        // Convert BGR to RGB and return
+        // Convert BGR to RGB
         uchar r = static_cast<uchar>(sum_r / pixel_count);
         uchar g = static_cast<uchar>(sum_g / pixel_count);
         uchar b = static_cast<uchar>(sum_b / pixel_count);
-        return cv::Vec3b(r, g, b);  // Return as RGB
+        cv::Vec3b color(r, g, b);
+        
+        // Apply gamma correction if enabled
+        return applyGammaCorrection(color);
     }
     
     return cv::Vec3b(0, 0, 0);
@@ -422,7 +426,10 @@ cv::Vec3b ColorExtractor::extractDominantColor(const cv::Mat& frame,
         uchar r = static_cast<uchar>(sum_r[max_bin] / max_count);
         uchar g = static_cast<uchar>(sum_g[max_bin] / max_count);
         uchar b = static_cast<uchar>(sum_b[max_bin] / max_count);
-        return cv::Vec3b(r, g, b);  // Return as RGB
+        cv::Vec3b color(r, g, b);
+        
+        // Apply gamma correction if enabled
+        return applyGammaCorrection(color);
     }
     
     return cv::Vec3b(0, 0, 0);
@@ -448,6 +455,47 @@ cv::Vec3b ColorExtractor::extractSingleColor(const cv::Mat& frame,
     
     // Use the optimized mask-based extraction
     return extractSingleColorWithMask(frame, mask, bbox);
+}
+
+void ColorExtractor::buildGammaLUT() {
+    // Pre-compute gamma correction lookup tables for fast processing
+    gamma_lut_red_.resize(256);
+    gamma_lut_green_.resize(256);
+    gamma_lut_blue_.resize(256);
+    
+    for (int i = 0; i < 256; i++) {
+        // Normalize to [0, 1] range
+        double normalized = i / 255.0;
+        
+        // Apply gamma correction: output = input^(1/gamma)
+        // This converts from linear light to display gamma
+        double corrected_r = std::pow(normalized, 1.0 / gamma_red_);
+        double corrected_g = std::pow(normalized, 1.0 / gamma_green_);
+        double corrected_b = std::pow(normalized, 1.0 / gamma_blue_);
+        
+        // Scale back to [0, 255] and clamp
+        gamma_lut_red_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_r * 255.0 + 0.5)));
+        gamma_lut_green_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_g * 255.0 + 0.5)));
+        gamma_lut_blue_[i] = static_cast<uchar>(std::min(255.0, std::max(0.0, corrected_b * 255.0 + 0.5)));
+    }
+    
+    LOG_DEBUG("Gamma correction LUT built - R: " + std::to_string(gamma_red_) + 
+              ", G: " + std::to_string(gamma_green_) + 
+              ", B: " + std::to_string(gamma_blue_));
+}
+
+cv::Vec3b ColorExtractor::applyGammaCorrection(const cv::Vec3b& color) const {
+    if (!gamma_enabled_) {
+        return color;
+    }
+    
+    // Apply gamma correction using pre-computed lookup tables
+    // Input color is in RGB format (r, g, b)
+    return cv::Vec3b(
+        gamma_lut_red_[color[0]],
+        gamma_lut_green_[color[1]],
+        gamma_lut_blue_[color[2]]
+    );
 }
 
 } // namespace TVLED

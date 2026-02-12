@@ -107,6 +107,13 @@ struct ColorExtractionConfig {
     int vertical_slices = 8;     // Number of vertical strips for left/right edges
 };
 
+struct GammaCorrectionConfig {
+    bool enabled = true;
+    double gamma_red = 2.2;
+    double gamma_green = 2.2;
+    double gamma_blue = 2.2;
+};
+
 class Config {
 public:
     Config() = default;
@@ -137,6 +144,7 @@ public:
     VisualizationConfig visualization;
     ColorSettingsConfig color_settings;
     ColorExtractionConfig color_extraction;
+    GammaCorrectionConfig gamma_correction;
     
     // Scaling
     float scale_factor = 2.0f;

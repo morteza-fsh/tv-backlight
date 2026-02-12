@@ -15,7 +15,7 @@ echo -e "${GREEN}=== TV LED Controller - USB Direct Mode ===${NC}"
 echo ""
 
 # Configuration
-CONFIG_FILE="config.hyperhdr.json"
+CONFIG_FILE="config.json"
 APP_PATH="./build/bin/app"
 USB_DEVICE="/dev/ttyUSB0"
 
@@ -70,7 +70,7 @@ if [ "$USB_ENABLED" = "true" ]; then
     echo "  Baudrate: $USB_BAUDRATE"
     
     # Calculate expected performance
-    LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
+    LED_COUNT=$(grep -A 20 '"led_layout"' "$CONFIG_FILE" | grep -A 6 '"hyperhdr"' | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
     if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ]; then
         PACKET_SIZE=$((6 + LED_COUNT * 3))
         MAX_FPS=$((USB_BAUDRATE / (PACKET_SIZE * 10)))
@@ -101,7 +101,7 @@ cleanup_leds() {
         sleep 1
     fi
     
-    LED_COUNT=$(grep -A 5 '"hyperhdr"' "$CONFIG_FILE" | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
+    LED_COUNT=$(grep -A 20 '"led_layout"' "$CONFIG_FILE" | grep -A 6 '"hyperhdr"' | grep -E '"top"|"bottom"|"left"|"right"' | grep -o '[0-9]*' | awk '{sum+=$1} END {print sum}')
     
     if [ -n "$LED_COUNT" ] && [ "$LED_COUNT" -gt 0 ] && [ -e "$USB_DEVICE" ]; then
         # Use Python for reliable serial communication

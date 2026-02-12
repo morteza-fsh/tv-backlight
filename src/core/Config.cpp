@@ -182,6 +182,15 @@ bool Config::loadFromFile(const std::string& filename) {
             color_extraction.vertical_slices = ce.value("vertical_slices", 8);
         }
         
+        // Parse gamma correction settings
+        if (j.contains("gamma_correction")) {
+            auto gc = j["gamma_correction"];
+            gamma_correction.enabled = gc.value("enabled", true);
+            gamma_correction.gamma_red = gc.value("gamma_red", 2.2);
+            gamma_correction.gamma_green = gc.value("gamma_green", 2.2);
+            gamma_correction.gamma_blue = gc.value("gamma_blue", 2.2);
+        }
+        
         LOG_INFO("Configuration loaded successfully");
         return true;
         
@@ -275,6 +284,11 @@ bool Config::saveToFile(const std::string& filename) const {
         j["color_extraction"]["vertical_coverage_percent"] = color_extraction.vertical_coverage_percent;
         j["color_extraction"]["horizontal_slices"] = color_extraction.horizontal_slices;
         j["color_extraction"]["vertical_slices"] = color_extraction.vertical_slices;
+        
+        j["gamma_correction"]["enabled"] = gamma_correction.enabled;
+        j["gamma_correction"]["gamma_red"] = gamma_correction.gamma_red;
+        j["gamma_correction"]["gamma_green"] = gamma_correction.gamma_green;
+        j["gamma_correction"]["gamma_blue"] = gamma_correction.gamma_blue;
         
         std::ofstream file(filename);
         if (!file.is_open()) {
