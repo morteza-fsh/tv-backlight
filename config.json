@@ -13,25 +13,30 @@
     "scaled_height": 616,
     "fps": 41,
     "autofocus_mode": "manual",
-    "lens_position": 61,
+    "lens_position": 1064,
     "awb_mode": "custom",
-    "awb_gain_red": 1.3790020942687988,
-    "awb_gain_blue": 1.651580810546875,
-    "awb_temperature": 4315,
-    "analogue_gain": 4.196721076965332,
-    "digital_gain": 1.0013396739959717,
+    "awb_gain_red": 1.145017385482788,
+    "awb_gain_blue": 2.054133892059326,
+    "awb_temperature": 3323,
+    "analogue_gain": 7.529411792755127,
+    "digital_gain": 1.0005580186843872,
     "exposure_time": 33213,
     "color_correction_matrix": [
-      2.1834516525268555,
-      -0.6952388286590576,
-      -0.48821285367012024,
-      -0.7258080840110779,
-      2.743297576904297,
-      -1.0174930095672607,
-      -0.2529396116733551,
-      -0.7524590492248535,
-      2.005398750305176
-    ]
+      2.222888708114624,
+      -0.6109947562217712,
+      -0.6118983030319214,
+      -0.7741405963897705,
+      2.6561882495880127,
+      -0.8820375800132751,
+      -0.25701624155044556,
+      -1.1246840953826904,
+      2.3816959857940674
+    ],
+    "ae_state": 0,
+    "frame_duration": 33326,
+    "lux": 50.08543014526367,
+    "scaler_crop": [0, 0, 3280, 2464],
+    "sensor_black_levels": [4096, 4096, 4096, 4096]
   },
   
   "hyperhdr": {
@@ -113,9 +118,9 @@
   
   "gamma_correction": {
     "enabled": true,
-    "gamma_red": 2.2,
-    "gamma_green": 2.2,
-    "gamma_blue": 2.2
+    "gamma_red": 2,
+    "gamma_green": 2,
+    "gamma_blue": 0.6
   }
 }
 
